@@ -4,8 +4,15 @@
 // - localhost for iOS simulators
 // - Your actual machine's IP for physical devices
 const getBaseUrl = () => {
-  // You must use the IP address where your backend is running
-  return 'http://192.168.0.101:5000/api'; // Using IP address instead of localhost
+  // For development, you can change this to your machine's IP address
+  const LOCAL_IP = '192.168.0.101'; // Change this to your computer's IP address
+  const PORT = '5000';
+  
+  // You can use different IPs based on platform if needed
+  // import { Platform } from 'react-native';
+  // const devHost = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
+  
+  return `http://${LOCAL_IP}:${PORT}/api`;
 };
 
 export const API_BASE_URL = getBaseUrl();
@@ -23,6 +30,14 @@ export const ENDPOINTS = {
     CREATE: '/drivers',
     UPDATE: '/drivers/:id',
     DELETE: '/drivers/:id',
+  },
+  EARNING: {
+    GET_ALL: '/earnings',
+    GET_ONE: '/earnings/:id',
+    GET_SUMMARY: '/earnings/driver/:driverId/summary',
+    CREATE: '/earnings',
+    UPDATE: '/earnings/:id',
+    DELETE: '/earnings/:id',
   }
 };
 
