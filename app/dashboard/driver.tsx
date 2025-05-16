@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 
 const screenWidth = Dimensions.get('window').width - 40;
+const screenHeight = Dimensions.get('window').height;
 const SIDEBAR_WIDTH = 270;
 
 export default function DriverDashboard() {
@@ -106,6 +107,7 @@ export default function DriverDashboard() {
     { icon: 'home-outline', label: 'Dashboard', route: '/dashboard/driver' },
     { icon: 'cash-outline', label: 'Earnings', route: '/dashboard/earnings' },
     { icon: 'list-outline', label: 'All Earnings', route: '/dashboard/all-earnings' },
+    { icon: 'wallet-outline', label: 'Account Earnings', route: '/dashboard/account-earnings' },
   ];
 
   // Add function to navigate to routes
@@ -158,67 +160,61 @@ export default function DriverDashboard() {
           { transform: [{ translateX: sidebarAnim }] }
         ]}
       >
-        <View style={styles.sidebarHeader}>
-          <View style={styles.sidebarUserInfo}>
-            <View style={styles.sidebarAvatar}>
-              <Text style={styles.avatarText}>{user?.name?.charAt(0) || 'D'}</Text>
+        <View style={{height: screenHeight, display: 'flex', flexDirection: 'column', justifyContent: 'space-between'}}>
+          <View style={styles.sidebarHeader}>
+            <View style={styles.sidebarUserInfo}>
+              <View style={styles.sidebarAvatar}>
+                <Text style={styles.avatarText}>{user?.name?.charAt(0) || 'D'}</Text>
+              </View>
+              <View style={styles.sidebarUserDetails}>
+                <Text style={styles.sidebarUserName}>{user?.name || 'Driver Name'}</Text>
+                <Text style={styles.sidebarUserRole}>{user?.role || 'Driver'}</Text>
+              </View>
             </View>
-            <View style={styles.sidebarUserDetails}>
-              <Text style={styles.sidebarUserName}>{user?.name || 'Driver Name'}</Text>
-              <Text style={styles.sidebarUserRole}>{user?.role || 'Driver'}</Text>
-            </View>
-          </View>
-          <TouchableOpacity 
-            style={styles.closeSidebar}
-            onPress={() => setSidebarOpen(false)}
-          >
-            <Ionicons name="close" size={24} color="#000" />
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView style={styles.sidebarContent}>
-          {menuItems.map((item, index) => (
             <TouchableOpacity 
-              key={index} 
-              style={[
-                styles.sidebarMenuItem,
-                (item.route === '/dashboard/driver' && pathname === '/dashboard/driver') || 
-                (item.route === '/dashboard/earnings' && pathname === '/dashboard/earnings') ? 
-                  styles.activeMenuItem : {}
-              ]}
-              onPress={() => navigateToRoute(item.route)}
+              style={styles.closeSidebar}
+              onPress={() => setSidebarOpen(false)}
             >
-              <Ionicons 
-                name={item.icon} 
-                size={22} 
-                color={
-                  (item.route === '/dashboard/driver' && pathname === '/dashboard/driver') || 
-                  (item.route === '/dashboard/earnings' && pathname === '/dashboard/earnings') ? 
-                    "#000" : "#666"
-                } 
-              />
-              <Text 
-                style={[
-                  styles.sidebarMenuItemText,
-                  (item.route === '/dashboard/driver' && pathname === '/dashboard/driver') || 
-                  (item.route === '/dashboard/earnings' && pathname === '/dashboard/earnings') ? 
-                    styles.activeMenuItemText : {}
-                ]}
-              >
-                {item.label}
-              </Text>
+              <Ionicons name="close" size={24} color="#000" />
             </TouchableOpacity>
-          ))}
-        </ScrollView>
-        
-        <View style={styles.sidebarFooter}>
-          <TouchableOpacity 
-            style={styles.logoutButton}
-            onPress={handleLogout}
-          >
-            <Ionicons name="log-out-outline" size={22} color="#FF3B30" />
-            <Text style={styles.logoutButtonText}>Logout</Text>
-          </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.sidebarContent}>
+            {menuItems.map((item, index) => (
+              <TouchableOpacity 
+                key={index} 
+                style={[
+                  styles.sidebarMenuItem,
+                  pathname === item.route ? styles.activeMenuItem : {}
+                ]}
+                onPress={() => navigateToRoute(item.route)}
+              >
+                <Ionicons 
+                  name={item.icon} 
+                  size={22} 
+                  color={pathname === item.route ? "#000" : "#666"} 
+                />
+                <Text 
+                  style={[
+                    styles.sidebarMenuItemText,
+                    pathname === item.route ? styles.activeMenuItemText : {}
+                  ]}
+                >
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          
+          <View style={styles.sidebarFooter}>
+            <TouchableOpacity 
+              style={styles.logoutButton}
+              onPress={handleLogout}
+            >
+              <Ionicons name="log-out-outline" size={22} color="#FF3B30" />
+              <Text style={styles.logoutButtonText}>Logout</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </Animated.View>
       
@@ -483,7 +479,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     width: SIDEBAR_WIDTH,
-    height: '100%',
+    height: screenHeight,
     backgroundColor: '#fff',
     zIndex: 2,
     borderTopRightRadius: 20,
@@ -493,7 +489,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 5,
-    bottom: 0,
   },
   sidebarHeader: {
     flexDirection: 'row',
@@ -540,6 +535,7 @@ const styles = StyleSheet.create({
   sidebarContent: {
     flex: 1,
     paddingTop: 10,
+    paddingBottom: 20,
   },
   sidebarMenuItem: {
     flexDirection: 'row',
@@ -564,6 +560,7 @@ const styles = StyleSheet.create({
     padding: 20,
     borderTopWidth: 1,
     borderTopColor: '#f0f0f0',
+    marginTop: 'auto',
   },
   logoutButton: {
     flexDirection: 'row',
