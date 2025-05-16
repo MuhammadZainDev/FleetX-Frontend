@@ -7,7 +7,9 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  FlatList
+  Image,
+  FlatList,
+  Dimensions
 } from 'react-native';
 import { router, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -15,6 +17,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { getAllEarnings } from '@/services/earning.service';
+
+const { width } = Dimensions.get('window');
+const cardWidth = width * 0.85;
 
 // Define data types
 type EarningType = {
@@ -34,7 +39,16 @@ type EarningType = {
   };
 };
 
-export default function AllEarningsScreen() {
+type AccountEarnings = {
+  accountName: 'Personal Account' | 'Limousine Account';
+  totalAmount: number;
+  earnings: EarningType[];
+  iconName: string;
+  cardColor: string;
+  textColor: string;
+};
+
+export default function AccountEarningsScreen() {
   const { user } = useAuth();
   const router = useRouter();
   
@@ -43,7 +57,7 @@ export default function AllEarningsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedFilter, setSelectedFilter] = useState<string | null>(null);
+  const [accountEarnings, setAccountEarnings] = useState<AccountEarnings[]>([]);
   
   // Role-based protection - only Driver can access this screen
   useEffect(() => {
@@ -58,27 +72,51 @@ export default function AllEarningsScreen() {
   }, [user, router]);
 
   // Fetch all earnings
-  const fetchEarnings = async (filter: string | null = null) => {
+  const fetchEarnings = async () => {
     if (!user) return;
     
     setIsLoading(true);
     setError(null);
     
     try {
-      const filters: any = {
+      const filters = {
         driverId: user.id,
       };
       
-      // Apply type filter if selected
-      if (filter) {
-        filters.type = filter;
-      }
-      
       const data = await getAllEarnings(filters);
       setEarnings(data);
+      
+      // Process the data for each account type
+      const personalAccountData = data.filter((item: EarningType) => item.accountName === 'Personal Account');
+      const limousineAccountData = data.filter((item: EarningType) => item.accountName === 'Limousine Account');
+      
+      const personalTotal = personalAccountData.reduce((sum: number, item: EarningType) => sum + parseFloat(String(item.amount)), 0);
+      const limousineTotal = limousineAccountData.reduce((sum: number, item: EarningType) => sum + parseFloat(String(item.amount)), 0);
+      
+      const accountsData: AccountEarnings[] = [
+        {
+          accountName: 'Personal Account',
+          totalAmount: personalTotal,
+          earnings: personalAccountData,
+          iconName: 'wallet-outline',
+          cardColor: '#2C3E50', // Dark blue-gray
+          textColor: '#ffffff'  // White
+        },
+        {
+          accountName: 'Limousine Account',
+          totalAmount: limousineTotal,
+          earnings: limousineAccountData,
+          iconName: 'car-outline',
+          cardColor: '#34495E', // Slightly lighter blue-gray
+          textColor: '#ffffff'  // White
+        }
+      ];
+      
+      setAccountEarnings(accountsData);
+      
     } catch (err) {
       console.error('Error fetching earnings data:', err);
-      setError('Failed to load earnings data. Please try again later.');
+      setError('Failed to load account earnings. Please try again later.');
     } finally {
       setIsLoading(false);
       setRefreshing(false);
@@ -87,18 +125,13 @@ export default function AllEarningsScreen() {
   
   // Initial fetch
   useEffect(() => {
-    fetchEarnings(selectedFilter);
-  }, [user, selectedFilter]);
+    fetchEarnings();
+  }, [user]);
   
   // Handle refresh
   const onRefresh = () => {
     setRefreshing(true);
-    fetchEarnings(selectedFilter);
-  };
-  
-  // Filter earnings by type
-  const applyFilter = (type: string | null) => {
-    setSelectedFilter(type);
+    fetchEarnings();
   };
   
   // Format currency
@@ -157,38 +190,51 @@ export default function AllEarningsScreen() {
     </View>
   );
   
-  // Render filter buttons
-  const renderFilterButtons = () => {
-    const filterOptions = [null, 'Online', 'Cash', 'Pocket Slipt'];
-    
-    return (
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filterContainer}
-      >
-        {filterOptions.map((option, index) => (
-          <TouchableOpacity
-            key={index}
-            style={[
-              styles.filterButton,
-              selectedFilter === option && styles.selectedFilterButton
-            ]}
-            onPress={() => applyFilter(option)}
-          >
-            <Text 
-              style={[
-                styles.filterText,
-                selectedFilter === option && styles.selectedFilterText
-              ]}
-            >
-              {option || 'All'}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-    );
-  };
+  // Render an account card
+  const renderAccountCard = (account: AccountEarnings, index: number) => (
+    <TouchableOpacity 
+      key={account.accountName}
+      style={[
+        styles.accountCard, 
+        { backgroundColor: account.cardColor }
+      ]}
+      onPress={() => router.push({
+        pathname: '/dashboard/account-detail',
+        params: { 
+          accountName: account.accountName,
+          totalAmount: account.totalAmount.toString()
+        }
+      } as any)}
+    >
+      <View style={styles.cardHeader}>
+        <Ionicons name={account.iconName as any} size={36} color={account.textColor} />
+        <View style={styles.cardTitleContainer}>
+          <Text style={[styles.cardTitle, { color: account.textColor }]}>{account.accountName}</Text>
+          <Text style={[styles.cardSubtitle, { color: account.textColor }]}>
+            {account.earnings.length} {account.earnings.length === 1 ? 'Payment' : 'Payments'}
+          </Text>
+        </View>
+      </View>
+      
+      <View style={styles.cardBody}>
+        <Text style={[styles.cardAmount, { color: account.textColor }]}>
+          {formatCurrency(account.totalAmount)}
+        </Text>
+        <Text style={[styles.cardLabel, { color: account.textColor }]}>Total Earnings</Text>
+      </View>
+      
+      <View style={styles.cardFooter}>
+        <Text style={[styles.viewDetailsText, { color: account.textColor }]}>
+          View Transactions
+        </Text>
+        <Ionicons 
+          name="chevron-forward" 
+          size={16} 
+          color={account.textColor} 
+        />
+      </View>
+    </TouchableOpacity>
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -202,21 +248,14 @@ export default function AllEarningsScreen() {
         >
           <Ionicons name="chevron-back" size={24} color="black" />
         </TouchableOpacity>
-        <Text style={styles.title}>All Earnings</Text>
+        <Text style={styles.title}>Account Earnings</Text>
         <View style={styles.rightPlaceholder} />
       </View>
       
-      {/* Filter section */}
-      <View style={styles.filterSection}>
-        <Text style={styles.filterTitle}>Filter by payment type:</Text>
-        {renderFilterButtons()}
-      </View>
-      
-      {/* Earnings list */}
       {isLoading && !refreshing ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#000000" />
-          <Text style={styles.loadingText}>Loading earnings data...</Text>
+          <Text style={styles.loadingText}>Loading account data...</Text>
         </View>
       ) : error ? (
         <View style={styles.errorContainer}>
@@ -224,17 +263,14 @@ export default function AllEarningsScreen() {
           <Text style={styles.errorText}>{error}</Text>
           <TouchableOpacity 
             style={styles.retryButton}
-            onPress={() => fetchEarnings(selectedFilter)}
+            onPress={() => fetchEarnings()}
           >
             <Text style={styles.retryButtonText}>Retry</Text>
           </TouchableOpacity>
         </View>
       ) : (
-        <FlatList
-          data={earnings}
-          renderItem={renderEarningItem}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.earningsList}
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
           refreshControl={
             <RefreshControl 
               refreshing={refreshing} 
@@ -242,15 +278,13 @@ export default function AllEarningsScreen() {
               colors={["#000"]} 
             />
           }
-          ListEmptyComponent={() => (
-            <View style={styles.emptyStateContainer}>
-              <Ionicons name="cash-outline" size={48} color="#ccc" />
-              <Text style={styles.emptyStateText}>
-                No earnings found{selectedFilter ? ` for ${selectedFilter} payments` : ''}
-              </Text>
-            </View>
-          )}
-        />
+        >
+          {/* Account Cards */}
+          <View style={styles.accountCardsContainer}>
+            <Text style={styles.sectionTitle}>Your Accounts</Text>
+            {accountEarnings.map(renderAccountCard)}
+          </View>
+        </ScrollView>
       )}
     </SafeAreaView>
   );
@@ -279,6 +313,9 @@ const styles = StyleSheet.create({
   },
   rightPlaceholder: {
     width: 24, // Match back button width for centering
+  },
+  scrollContent: {
+    padding: 16,
   },
   loadingContainer: {
     flex: 1,
@@ -313,58 +350,87 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
   },
-  filterSection: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 16,
+    marginLeft: 4,
   },
-  filterTitle: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 8,
+  accountCardsContainer: {
+    marginBottom: 24,
   },
-  filterContainer: {
+  accountCard: {
+    width: cardWidth,
+    marginBottom: 16,
+    borderRadius: 16,
+    padding: 20,
+    alignSelf: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 5,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  cardHeader: {
     flexDirection: 'row',
-    paddingBottom: 4,
+    alignItems: 'center',
+    marginBottom: 20,
   },
-  filterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 20,
-    marginRight: 8,
+  cardTitleContainer: {
+    marginLeft: 12,
   },
-  selectedFilterButton: {
-    backgroundColor: '#000',
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
   },
-  filterText: {
+  cardSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+    opacity: 0.8,
+  },
+  cardBody: {
+    marginBottom: 20,
+  },
+  cardAmount: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  cardLabel: {
     fontSize: 14,
-    color: '#333',
+    opacity: 0.7,
   },
-  selectedFilterText: {
-    color: '#fff',
-    fontWeight: '500',
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#444',
+    paddingTop: 12,
   },
-  earningsList: {
-    paddingVertical: 8,
+  viewDetailsText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginRight: 8,
   },
   earningItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: '#eee',
   },
   earningIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#f0f0f0',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
+    borderWidth: 1,
+    borderColor: '#ddd',
   },
   earningInfo: {
     flex: 1,
@@ -388,17 +454,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#000',
-  },
-  emptyStateContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 40,
-  },
-  emptyStateText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
   },
 }); 

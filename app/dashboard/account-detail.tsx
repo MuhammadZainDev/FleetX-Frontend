@@ -6,10 +6,9 @@ import {
   ScrollView, 
   TouchableOpacity,
   ActivityIndicator,
-  RefreshControl,
-  FlatList
+  RefreshControl
 } from 'react-native';
-import { router, useRouter } from 'expo-router';
+import { router, useRouter, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,16 +33,20 @@ type EarningType = {
   };
 };
 
-export default function AllEarningsScreen() {
+export default function AccountDetailScreen() {
   const { user } = useAuth();
   const router = useRouter();
+  const params = useLocalSearchParams();
+  
+  // Get account name and total amount from params
+  const accountName = params.accountName as 'Personal Account' | 'Limousine Account';
+  const totalAmount = parseFloat((params.totalAmount as string) || '0');
   
   // States
   const [earnings, setEarnings] = useState<EarningType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedFilter, setSelectedFilter] = useState<string | null>(null);
   
   // Role-based protection - only Driver can access this screen
   useEffect(() => {
@@ -57,28 +60,29 @@ export default function AllEarningsScreen() {
     }
   }, [user, router]);
 
-  // Fetch all earnings
-  const fetchEarnings = async (filter: string | null = null) => {
+  // Fetch earnings for the specific account
+  const fetchEarnings = async () => {
     if (!user) return;
     
     setIsLoading(true);
     setError(null);
     
     try {
-      const filters: any = {
+      const filters = {
         driverId: user.id,
       };
       
-      // Apply type filter if selected
-      if (filter) {
-        filters.type = filter;
-      }
+      const allEarnings = await getAllEarnings(filters);
       
-      const data = await getAllEarnings(filters);
-      setEarnings(data);
+      // Filter earnings for this specific account
+      const filteredEarnings = allEarnings.filter(
+        (item: EarningType) => item.accountName === accountName
+      );
+      
+      setEarnings(filteredEarnings);
     } catch (err) {
       console.error('Error fetching earnings data:', err);
-      setError('Failed to load earnings data. Please try again later.');
+      setError('Failed to load account earnings. Please try again later.');
     } finally {
       setIsLoading(false);
       setRefreshing(false);
@@ -87,18 +91,13 @@ export default function AllEarningsScreen() {
   
   // Initial fetch
   useEffect(() => {
-    fetchEarnings(selectedFilter);
-  }, [user, selectedFilter]);
+    fetchEarnings();
+  }, [user, accountName]);
   
   // Handle refresh
   const onRefresh = () => {
     setRefreshing(true);
-    fetchEarnings(selectedFilter);
-  };
-  
-  // Filter earnings by type
-  const applyFilter = (type: string | null) => {
-    setSelectedFilter(type);
+    fetchEarnings();
   };
   
   // Format currency
@@ -132,63 +131,6 @@ export default function AllEarningsScreen() {
       minute: '2-digit'
     });
   };
-  
-  // Render each earning item
-  const renderEarningItem = ({ item }: { item: EarningType }) => (
-    <View style={styles.earningItem}>
-      <View style={styles.earningIconContainer}>
-        <Ionicons 
-          name={
-            item.type === 'Online' ? 'card-outline' :
-            item.type === 'Cash' ? 'cash-outline' : 'wallet-outline'
-          } 
-          size={24} 
-          color="#000" 
-        />
-      </View>
-      <View style={styles.earningInfo}>
-        <Text style={styles.earningTitle}>
-          {item.type} Payment
-        </Text>
-        <Text style={styles.earningDate}>{formatDate(item.date)}</Text>
-        {item.note && <Text style={styles.earningNote}>{item.note}</Text>}
-      </View>
-      <Text style={styles.earningAmount}>{formatCurrency(item.amount)}</Text>
-    </View>
-  );
-  
-  // Render filter buttons
-  const renderFilterButtons = () => {
-    const filterOptions = [null, 'Online', 'Cash', 'Pocket Slipt'];
-    
-    return (
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filterContainer}
-      >
-        {filterOptions.map((option, index) => (
-          <TouchableOpacity
-            key={index}
-            style={[
-              styles.filterButton,
-              selectedFilter === option && styles.selectedFilterButton
-            ]}
-            onPress={() => applyFilter(option)}
-          >
-            <Text 
-              style={[
-                styles.filterText,
-                selectedFilter === option && styles.selectedFilterText
-              ]}
-            >
-              {option || 'All'}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-    );
-  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -198,25 +140,18 @@ export default function AllEarningsScreen() {
       <View style={styles.header}>
         <TouchableOpacity 
           style={styles.backButton}
-          onPress={() => router.push('/dashboard/driver' as any)}
+          onPress={() => router.push('/dashboard/account-earnings' as any)}
         >
           <Ionicons name="chevron-back" size={24} color="black" />
         </TouchableOpacity>
-        <Text style={styles.title}>All Earnings</Text>
+        <Text style={styles.title}>{accountName}</Text>
         <View style={styles.rightPlaceholder} />
       </View>
       
-      {/* Filter section */}
-      <View style={styles.filterSection}>
-        <Text style={styles.filterTitle}>Filter by payment type:</Text>
-        {renderFilterButtons()}
-      </View>
-      
-      {/* Earnings list */}
       {isLoading && !refreshing ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#000000" />
-          <Text style={styles.loadingText}>Loading earnings data...</Text>
+          <Text style={styles.loadingText}>Loading transactions...</Text>
         </View>
       ) : error ? (
         <View style={styles.errorContainer}>
@@ -224,33 +159,60 @@ export default function AllEarningsScreen() {
           <Text style={styles.errorText}>{error}</Text>
           <TouchableOpacity 
             style={styles.retryButton}
-            onPress={() => fetchEarnings(selectedFilter)}
+            onPress={() => fetchEarnings()}
           >
             <Text style={styles.retryButtonText}>Retry</Text>
           </TouchableOpacity>
         </View>
       ) : (
-        <FlatList
-          data={earnings}
-          renderItem={renderEarningItem}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.earningsList}
-          refreshControl={
-            <RefreshControl 
-              refreshing={refreshing} 
-              onRefresh={onRefresh}
-              colors={["#000"]} 
-            />
-          }
-          ListEmptyComponent={() => (
-            <View style={styles.emptyStateContainer}>
-              <Ionicons name="cash-outline" size={48} color="#ccc" />
-              <Text style={styles.emptyStateText}>
-                No earnings found{selectedFilter ? ` for ${selectedFilter} payments` : ''}
-              </Text>
-            </View>
-          )}
-        />
+        <View style={styles.transactionsContainer}>
+          <Text style={styles.sectionTitle}>Transaction History</Text>
+          
+          <ScrollView
+            style={styles.transactionList}
+            contentContainerStyle={styles.transactionListContent}
+            refreshControl={
+              <RefreshControl 
+                refreshing={refreshing} 
+                onRefresh={onRefresh}
+                colors={["#000"]} 
+                tintColor="#000"
+              />
+            }
+          >
+            {earnings.length > 0 ? (
+              earnings.map(earning => (
+                <View key={earning.id} style={styles.transactionItem}>
+                  <View style={styles.transactionIconContainer}>
+                    <Ionicons 
+                      name={
+                        earning.type === 'Online' ? 'card-outline' :
+                        earning.type === 'Cash' ? 'cash-outline' : 'wallet-outline'
+                      } 
+                      size={24} 
+                      color="#000" 
+                    />
+                  </View>
+                  <View style={styles.transactionInfo}>
+                    <Text style={styles.transactionTitle}>
+                      {earning.type} Payment
+                    </Text>
+                    <Text style={styles.transactionDate}>{formatDate(earning.date)}</Text>
+                    {earning.note && <Text style={styles.transactionNote}>{earning.note}</Text>}
+                  </View>
+                  <Text style={styles.transactionAmount}>{formatCurrency(earning.amount)}</Text>
+                </View>
+              ))
+            ) : (
+              <View style={styles.emptyStateContainer}>
+                <Ionicons name="document-outline" size={48} color="#999" />
+                <Text style={styles.emptyStateText}>
+                  No transactions found for this account
+                </Text>
+              </View>
+            )}
+          </ScrollView>
+        </View>
       )}
     </SafeAreaView>
   );
@@ -276,6 +238,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: 'bold',
+    color: 'black',
   },
   rightPlaceholder: {
     width: 24, // Match back button width for centering
@@ -313,91 +276,74 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
   },
-  filterSection: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+  transactionsContainer: {
+    flex: 1,
+    padding: 16,
   },
-  filterTitle: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 8,
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 16,
+    marginLeft: 4,
   },
-  filterContainer: {
-    flexDirection: 'row',
-    paddingBottom: 4,
+  transactionList: {
+    flex: 1,
   },
-  filterButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 20,
-    marginRight: 8,
+  transactionListContent: {
+    paddingBottom: 20,
   },
-  selectedFilterButton: {
-    backgroundColor: '#000',
-  },
-  filterText: {
-    fontSize: 14,
-    color: '#333',
-  },
-  selectedFilterText: {
-    color: '#fff',
-    fontWeight: '500',
-  },
-  earningsList: {
-    paddingVertical: 8,
-  },
-  earningItem: {
+  transactionItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: '#eee',
   },
-  earningIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#f0f0f0',
+  transactionIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    backgroundColor: '#f9f9f9',
   },
-  earningInfo: {
+  transactionInfo: {
     flex: 1,
   },
-  earningTitle: {
+  transactionTitle: {
     fontSize: 16,
     fontWeight: '500',
+    color: '#000',
     marginBottom: 2,
   },
-  earningDate: {
+  transactionDate: {
     fontSize: 12,
     color: '#666',
     marginBottom: 2,
   },
-  earningNote: {
+  transactionNote: {
     fontSize: 12,
     color: '#888',
     fontStyle: 'italic',
   },
-  earningAmount: {
+  transactionAmount: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#000',
   },
   emptyStateContainer: {
-    flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
-    padding: 40,
+    justifyContent: 'center',
+    padding: 30,
+    marginTop: 30,
   },
   emptyStateText: {
     marginTop: 10,
-    fontSize: 16,
+    fontSize: 14,
     color: '#666',
     textAlign: 'center',
   },

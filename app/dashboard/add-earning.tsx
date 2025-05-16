@@ -288,23 +288,23 @@ export default function AddEarningScreen() {
               <TouchableOpacity
                 style={[
                   styles.paymentTypeButton,
-                  formData.type === 'PocketSlipt' && styles.activePaymentTypeButton
+                  formData.type === 'Pocket Slipt' && styles.activePaymentTypeButton
                 ]}
-                onPress={() => handleInputChange('type', 'PocketSlipt')}
+                onPress={() => handleInputChange('type', 'Pocket Slipt')}
               >
                 <Ionicons 
                   name="wallet-outline" 
                   size={20} 
-                  color={formData.type === 'PocketSlipt' ? "#fff" : "#666"} 
+                  color={formData.type === 'Pocket Slipt' ? "#fff" : "#666"} 
                   style={styles.paymentTypeIcon}
                 />
                 <Text 
                   style={[
                     styles.paymentTypeText,
-                    formData.type === 'PocketSlipt' && styles.activePaymentTypeText
+                    formData.type === 'Pocket Slipt' && styles.activePaymentTypeText
                   ]}
                 >
-                  PocketSlipt
+                  Pocket Slipt
                 </Text>
               </TouchableOpacity>
               <View style={styles.emptyButton}></View>

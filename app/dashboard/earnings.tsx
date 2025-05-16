@@ -26,7 +26,7 @@ type EarningType = {
   id: string;
   amount: number;
   note?: string;
-  type: 'Online' | 'Cash' | 'PocketSlipt';
+  type: 'Online' | 'Cash' | 'Pocket Slipt';
   driverId: string;
   date: string;
   createdAt: string;
@@ -42,7 +42,7 @@ type EarningsSummary = {
   totalEarnings: number;
   percentChange: number;
   breakdown: {
-    type: 'Online' | 'Cash' | 'PocketSlipt';
+    type: 'Online' | 'Cash' | 'Pocket Slipt';
     totalAmount: number;
     count: number;
   }[];
@@ -212,6 +212,7 @@ export default function EarningsScreen() {
     { icon: 'home-outline', label: 'Dashboard', route: '/dashboard/driver' },
     { icon: 'cash-outline', label: 'Earnings', route: '/dashboard/earnings' },
     { icon: 'list-outline', label: 'All Earnings', route: '/dashboard/all-earnings' },
+    { icon: 'wallet-outline', label: 'Account Earnings', route: '/dashboard/account-earnings' },
   ];
 
   const navigateToRoute = (route: string) => {
@@ -298,7 +299,8 @@ export default function EarningsScreen() {
                 styles.sidebarMenuItem,
                 (item.route === '/dashboard/driver' && pathname === '/dashboard/driver') || 
                 (item.route === '/dashboard/earnings' && pathname === '/dashboard/earnings') ||
-                (item.route === '/dashboard/all-earnings' && pathname === '/dashboard/all-earnings') ? 
+                (item.route === '/dashboard/all-earnings' && pathname === '/dashboard/all-earnings') ||
+                (item.route === '/dashboard/account-earnings' && pathname === '/dashboard/account-earnings') ? 
                   styles.activeMenuItem : {}
               ]}
               onPress={() => navigateToRoute(item.route)}
@@ -309,7 +311,8 @@ export default function EarningsScreen() {
                 color={
                   (item.route === '/dashboard/driver' && pathname === '/dashboard/driver') || 
                   (item.route === '/dashboard/earnings' && pathname === '/dashboard/earnings') ||
-                  (item.route === '/dashboard/all-earnings' && pathname === '/dashboard/all-earnings') ? 
+                  (item.route === '/dashboard/all-earnings' && pathname === '/dashboard/all-earnings') ||
+                  (item.route === '/dashboard/account-earnings' && pathname === '/dashboard/account-earnings') ? 
                     "#000" : "#666"
                 } 
               />
@@ -318,7 +321,8 @@ export default function EarningsScreen() {
                   styles.sidebarMenuItemText,
                   (item.route === '/dashboard/driver' && pathname === '/dashboard/driver') || 
                   (item.route === '/dashboard/earnings' && pathname === '/dashboard/earnings') ||
-                  (item.route === '/dashboard/all-earnings' && pathname === '/dashboard/all-earnings') ? 
+                  (item.route === '/dashboard/all-earnings' && pathname === '/dashboard/all-earnings') ||
+                  (item.route === '/dashboard/account-earnings' && pathname === '/dashboard/account-earnings') ? 
                     styles.activeMenuItemText : {}
                 ]}
               >
@@ -416,7 +420,7 @@ export default function EarningsScreen() {
                   </View>
                 ))
               ) : (
-                ['Online', 'Cash', 'PocketSlipt'].map((type, index) => (
+                ['Online', 'Cash', 'Pocket Slipt'].map((type, index) => (
                   <View key={index} style={styles.paymentMethodCard}>
                     <View style={styles.paymentMethodHeader}>
                       <Ionicons 

@@ -114,6 +114,28 @@ export default function DriverDashboard() {
     setSidebarOpen(false);
   };
 
+  // Dashboard quick action buttons
+  const quickActions = [
+    { 
+      icon: 'cash-outline' as React.ComponentProps<typeof Ionicons>['name'], 
+      label: 'View Earnings', 
+      onPress: () => router.push('/dashboard/earnings' as any),
+      color: '#4CAF50'
+    },
+    {
+      icon: 'wallet-outline' as React.ComponentProps<typeof Ionicons>['name'],
+      label: 'Account Earnings',
+      onPress: () => router.push('/dashboard/account-earnings' as any),
+      color: '#2196F3'
+    },
+    { 
+      icon: 'add-circle-outline' as React.ComponentProps<typeof Ionicons>['name'], 
+      label: 'Add Earning', 
+      onPress: () => router.push('/dashboard/add-earning' as any),
+      color: '#FF9800'
+    }
+  ];
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
@@ -397,25 +419,16 @@ export default function DriverDashboard() {
           <Text style={styles.sectionTitle}>Quick Actions</Text>
           
           <View style={styles.quickActionsGrid}>
-            <TouchableOpacity style={styles.quickActionButton}>
-              <Ionicons name="car-outline" size={24} color="#000000" />
-              <Text style={styles.quickActionText}>Vehicle Check</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.quickActionButton}>
-              <Ionicons name="document-text-outline" size={24} color="#000000" />
-              <Text style={styles.quickActionText}>Submit Report</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.quickActionButton}>
-              <Ionicons name="help-circle-outline" size={24} color="#000000" />
-              <Text style={styles.quickActionText}>Get Support</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.quickActionButton}>
-              <Ionicons name="calendar-outline" size={24} color="#000000" />
-              <Text style={styles.quickActionText}>Request Time Off</Text>
-            </TouchableOpacity>
+            {quickActions.map((action, index) => (
+              <TouchableOpacity 
+                key={index}
+                style={[styles.quickActionButton, { backgroundColor: action.color }]}
+                onPress={action.onPress}
+              >
+                <Ionicons name={action.icon} size={24} color="white" />
+                <Text style={styles.quickActionText}>{action.label}</Text>
+              </TouchableOpacity>
+            ))}
       </View>
     </View>
       </ScrollView>
@@ -851,17 +864,24 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   quickActionButton: {
-    backgroundColor: '#f5f5f5',
-    width: '48%',
-    borderRadius: 10,
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
     padding: 15,
     alignItems: 'center',
-    marginBottom: 15,
+    justifyContent: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    width: '48%',
+    marginBottom: 10,
+    flexDirection: 'row',
   },
   quickActionText: {
-    marginTop: 8,
-    fontSize: 12,
+    marginLeft: 8,
+    fontSize: 14,
     fontWeight: '500',
-    color: '#333',
+    color: '#ffffff',
   },
 }); 
