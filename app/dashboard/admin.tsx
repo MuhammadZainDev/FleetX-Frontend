@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 
 const screenWidth = Dimensions.get('window').width - 40;
+const screenHeight = Dimensions.get('window').height;
 const SIDEBAR_WIDTH = 270;
 
 export default function AdminDashboard() {
@@ -97,16 +98,22 @@ export default function AdminDashboard() {
   const navigate = (route: string) => {
     setSidebarOpen(false);
     
+    console.log(`Admin dashboard: Navigating to ${route}`);
+    
     // Handle navigation based on route path
     switch (route) {
-      case '/dashboard/drivers':
-        router.push('/dashboard/drivers');
+      case '/vehicles':
+        // Use replace for more consistent navigation
+        console.log('Admin dashboard: Navigating to vehicles page');
+        try {
+          router.replace('/vehicles');
+          console.log('Navigation completed');
+        } catch (error) {
+          console.error('Navigation error:', error);
+        }
         break;
       case '/dashboard/admin':
-        router.push('/dashboard/admin');
-        break;
-      case '/dashboard/driver':
-        router.push('/dashboard/driver');
+        router.replace('/dashboard/admin');
         break;
       default:
         // For other routes, just log for now
@@ -115,14 +122,10 @@ export default function AdminDashboard() {
     }
   };
 
-  // Sidebar menu items
+  // Sidebar menu items - only vehicles as requested
   const menuItems = [
     { icon: 'home-outline' as any, label: 'Dashboard', route: '/dashboard/admin' },
-    { icon: 'people-outline' as any, label: 'Drivers', route: '/dashboard/drivers' },
     { icon: 'car-outline' as any, label: 'Vehicles', route: '/vehicles' },
-    { icon: 'location-outline' as any, label: 'Tracking', route: '/tracking' },
-    { icon: 'document-text-outline' as any, label: 'Reports', route: '/reports' },
-    { icon: 'settings-outline' as any, label: 'Settings', route: '/settings' },
   ];
 
   return (
@@ -147,63 +150,65 @@ export default function AdminDashboard() {
           { transform: [{ translateX: sidebarAnim }] }
         ]}
       >
-        <View style={styles.sidebarHeader}>
-          <View style={styles.sidebarUserInfo}>
-            <View style={styles.sidebarAvatar}>
-              <Text style={styles.avatarText}>{user?.name?.charAt(0) || 'A'}</Text>
+        <View style={{height: screenHeight, display: 'flex', flexDirection: 'column', justifyContent: 'space-between'}}>
+          <View style={styles.sidebarHeader}>
+            <View style={styles.sidebarUserInfo}>
+              <View style={styles.sidebarAvatar}>
+                <Text style={styles.avatarText}>{user?.name?.charAt(0) || 'A'}</Text>
+              </View>
+              <View style={styles.sidebarUserDetails}>
+                <Text style={styles.sidebarUserName}>{user?.name || 'Admin User'}</Text>
+                <Text style={styles.sidebarUserRole}>{user?.role || 'Admin'}</Text>
+              </View>
             </View>
-            <View style={styles.sidebarUserDetails}>
-              <Text style={styles.sidebarUserName}>{user?.name || 'Admin User'}</Text>
-              <Text style={styles.sidebarUserRole}>{user?.role || 'Admin'}</Text>
-            </View>
-          </View>
-          <TouchableOpacity 
-            style={styles.closeSidebar}
-            onPress={() => setSidebarOpen(false)}
-          >
-            <Ionicons name="close" size={24} color="#000" />
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView style={styles.sidebarContent}>
-          {menuItems.map((item, index) => (
             <TouchableOpacity 
-              key={index} 
-              style={[
-                styles.sidebarMenuItem,
-                index === 0 && styles.activeMenuItem
-              ]}
-              onPress={() => navigate(item.route)}
+              style={styles.closeSidebar}
+              onPress={() => setSidebarOpen(false)}
             >
-              <Ionicons 
-                name={item.icon as any} 
-                size={22} 
-                color={index === 0 ? "#000" : "#666"} 
-              />
-              <Text 
-                style={[
-                  styles.sidebarMenuItemText,
-                  index === 0 && styles.activeMenuItemText
-                ]}
-              >
-                {item.label}
-              </Text>
+              <Ionicons name="close" size={24} color="#000" />
             </TouchableOpacity>
-          ))}
-        </ScrollView>
-        
-        <View style={styles.sidebarFooter}>
-          <TouchableOpacity 
-            style={styles.logoutButton}
-            onPress={handleLogout}
-          >
-            <Ionicons name="log-out-outline" size={22} color="#FF3B30" />
-            <Text style={styles.logoutButtonText}>Logout</Text>
-          </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.sidebarContent}>
+            {menuItems.map((item, index) => (
+              <TouchableOpacity 
+                key={index} 
+                style={[
+                  styles.sidebarMenuItem,
+                  index === 0 && styles.activeMenuItem
+                ]}
+                onPress={() => navigate(item.route)}
+              >
+                <Ionicons 
+                  name={item.icon as any} 
+                  size={22} 
+                  color={index === 0 ? "#000" : "#666"} 
+                />
+                <Text 
+                  style={[
+                    styles.sidebarMenuItemText,
+                    index === 0 && styles.activeMenuItemText
+                  ]}
+                >
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          
+          <View style={styles.sidebarFooter}>
+            <TouchableOpacity 
+              style={styles.logoutButton}
+              onPress={handleLogout}
+            >
+              <Ionicons name="log-out-outline" size={22} color="#FF3B30" />
+              <Text style={styles.logoutButtonText}>Logout</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </Animated.View>
       
-        <View style={styles.header}>
+      <View style={styles.header}>
         <View style={styles.headerLeft}>
           <TouchableOpacity 
             style={styles.menuButton}

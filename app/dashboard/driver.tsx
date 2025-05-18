@@ -8,24 +8,121 @@ import {
   Image, 
   Dimensions,
   Animated,
-  Easing 
+  Easing,
+  ImageBackground,
+  Platform,
+  ActivityIndicator,
+  FlatList
 } from 'react-native';
 import { router, useRouter, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
+import { LinearGradient } from 'expo-linear-gradient';
+import { getEarningsSummary } from '@/services/earning.service';
+import { getExpensesSummary, getAllExpenses } from '@/services/expense.service';
+import { getProfile } from '@/services/auth.service';
+import { getDriverVehicles } from '@/services/vehicle.service';
+import { getAllEarnings } from '@/services/earning.service';
 
 const screenWidth = Dimensions.get('window').width - 40;
 const screenHeight = Dimensions.get('window').height;
 const SIDEBAR_WIDTH = 270;
+const { width } = Dimensions.get('window');
+
+// Define Vehicle type
+type Vehicle = {
+  id: string;
+  name: string;
+  plate: string;
+  status: string;
+  type: string;
+  color: string;
+  location: string;
+  model: string;
+  ownership: string;
+  image: string;
+};
+
+// Define VehicleResponse type
+type VehicleResponse = {
+  message: string;
+  count: number;
+  vehicles: Vehicle[];
+};
+
+// Define Earning type
+type Earning = {
+  id: string;
+  amount: number;
+  description: string;
+  date: string;
+  driverId: string;
+  vehicleId?: string;
+  type?: string;
+  category?: string;
+};
+
+// Define Expense type
+type Expense = {
+  id: string;
+  amount: number;
+  description: string;
+  date: string;
+  driverId: string;
+  vehicleId?: string;
+  category?: string;
+};
 
 export default function DriverDashboard() {
-  const { logout, user } = useAuth();
+  const { logout, user, refreshUser, authToken } = useAuth();
   const [selectedPeriod, setSelectedPeriod] = useState('Daily');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [transactionFilter, setTransactionFilter] = useState('All');
+  const [showTransactionFilterDropdown, setShowTransactionFilterDropdown] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
+  const [totalEarnings, setTotalEarnings] = useState(0);
+  const [totalExpenses, setTotalExpenses] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [userData, setUserData] = useState(user);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [vehiclesLoading, setVehiclesLoading] = useState(true);
+  const [todayEarnings, setTodayEarnings] = useState<Earning[]>([]);
+  const [todayExpenses, setTodayExpenses] = useState<Expense[]>([]);
+  const [todayTransactionsLoading, setTodayTransactionsLoading] = useState(true);
+  const [lastRefreshed, setLastRefreshed] = useState(Date.now());
+
+  // Refresh user data when component loads
+  useEffect(() => {
+    const loadUserData = async () => {
+      try {
+        // Only refresh if we have an authenticated user
+        if (user && user.id) {
+          await refreshUser();
+          console.log("User data refreshed:", user?.name);
+          
+          // Also try to get profile data directly
+          try {
+            const profileData = await getProfile();
+            if (profileData && profileData.user) {
+              setUserData(profileData.user);
+              console.log("Profile data loaded:", profileData.user.name);
+            }
+          } catch (profileError) {
+            console.error("Error fetching profile:", profileError);
+          }
+        } else {
+          console.log("No user found to refresh");
+        }
+      } catch (error) {
+        console.error('Error refreshing user data:', error);
+      }
+    };
+    
+    loadUserData();
+  }, [user?.id]);
 
   // Role-based protection - only Driver can access this dashboard
   useEffect(() => {
@@ -38,6 +135,200 @@ export default function DriverDashboard() {
       }
     }
   }, [user, router]);
+
+  // Fetch driver's earnings and expenses
+  useEffect(() => {
+    const fetchDriverData = async () => {
+      try {
+        setIsLoading(true);
+        const [earningSummary, expenseSummary] = await Promise.all([
+          getEarningsSummary(user?.id, selectedPeriod),
+          getExpensesSummary(user?.id, selectedPeriod)
+        ]);
+        
+        setTotalEarnings(earningSummary.totalEarnings || 0);
+        setTotalExpenses(expenseSummary.totalExpenses || 0);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (user?.id) {
+      fetchDriverData();
+    }
+  }, [user, selectedPeriod]);
+
+  // Fetch driver's vehicles
+  useEffect(() => {
+    const fetchVehicles = async () => {
+      try {
+        setVehiclesLoading(true);
+        if (!user?.id || !authToken) return;
+        
+        const response = await getDriverVehicles(user.id, authToken);
+        if (response && response.vehicles) {
+          setVehicles(response.vehicles);
+        }
+      } catch (error) {
+        console.error('Error fetching vehicles:', error);
+      } finally {
+        setVehiclesLoading(false);
+      }
+    };
+
+    fetchVehicles();
+  }, [user?.id, authToken]);
+
+  // Function to refresh today's transactions data
+  const refreshTodayTransactions = () => {
+    setLastRefreshed(Date.now());
+  };
+
+  // Make refreshTodayTransactions globally available for other components
+  useEffect(() => {
+    if (global) {
+      (global as any).refreshDriverDashboard = refreshTodayTransactions;
+    }
+    return () => {
+      if (global) {
+        (global as any).refreshDriverDashboard = undefined;
+      }
+    };
+  }, []);
+
+  // Fetch today's transactions (earnings and expenses)
+  useEffect(() => {
+    const fetchTodayTransactions = async () => {
+      try {
+        setTodayTransactionsLoading(true);
+        if (!user?.id || !authToken) return;
+        
+        // Get today's date in YYYY-MM-DD format
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Set to start of today
+        
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        
+        // Format with timezone adjustment to avoid off-by-one errors
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        
+        const todayDate = `${year}-${month}-${day}`;
+        const tomorrowDate = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
+        
+        console.log('Today date for filtering:', todayDate, 'Today timestamp:', today.getTime());
+        console.log('Tomorrow date for filtering:', tomorrowDate);
+        
+        // Fetch earnings and expenses for today - we'll try with and without date filters
+        console.log('Fetching earnings without date filters to check returned format');
+        const allEarningsResponse = await getAllEarnings({ driverId: user.id });
+        console.log('All earnings response:', allEarningsResponse);
+        
+        // Now fetch with date filters
+        console.log('Fetching earnings with date filters');
+        const [earningsResponse, expensesResponse] = await Promise.all([
+          getAllEarnings({ 
+            driverId: user.id,
+            startDate: todayDate,
+            endDate: tomorrowDate
+          }),
+          getAllExpenses({
+            driverId: user.id,
+            startDate: todayDate,
+            endDate: tomorrowDate
+          })
+        ]);
+        
+        console.log('Earnings response structure:', earningsResponse);
+        
+        // Handle earnings - check if it's an array or has an 'earnings' property
+        let allEarnings = Array.isArray(earningsResponse) 
+          ? earningsResponse 
+          : (earningsResponse && earningsResponse.earnings 
+              ? earningsResponse.earnings 
+              : []);
+        
+        console.log('All earnings for processing:', allEarnings.length);
+        
+        // Filter earnings for today's date - more flexible date checking
+        const todaysEarnings = allEarnings.filter((earning: Earning) => {
+          if (!earning.date) return false;
+          
+          // Check if date matches today (accounting for different date formats)
+          const earningDate = new Date(earning.date);
+          
+          // For better date comparison, use the date string parts to avoid timezone issues
+          const earningYear = earningDate.getFullYear();
+          const earningMonth = earningDate.getMonth() + 1;
+          const earningDay = earningDate.getDate();
+          
+          // Compare date components directly
+          const isSameDay = 
+            earningYear === year && 
+            earningMonth === parseInt(month) && 
+            earningDay === parseInt(day);
+          
+          console.log('Earning date check:', earning.id, earning.date, 
+                      'Year:', earningYear, 'Month:', earningMonth, 'Day:', earningDay,
+                      'Is today:', isSameDay);
+          
+          return isSameDay;
+        });
+        
+        console.log('Today\'s earnings:', todaysEarnings.length);
+        setTodayEarnings(todaysEarnings);
+        
+        console.log('Expenses response structure:', expensesResponse);
+        
+        // Handle expenses - check if it's an array or has an 'expenses' property
+        let allExpenses = Array.isArray(expensesResponse) 
+          ? expensesResponse 
+          : (expensesResponse && expensesResponse.expenses 
+              ? expensesResponse.expenses 
+              : []);
+        
+        console.log('All expenses for processing:', allExpenses.length);
+        
+        // Filter expenses for today's date - more flexible date checking
+        const todaysExpenses = allExpenses.filter((expense: Expense) => {
+          if (!expense.date) return false;
+          
+          // Check if date matches today (accounting for different date formats)
+          const expenseDate = new Date(expense.date);
+          
+          // For better date comparison, use the date string parts to avoid timezone issues
+          const expenseYear = expenseDate.getFullYear();
+          const expenseMonth = expenseDate.getMonth() + 1;
+          const expenseDay = expenseDate.getDate();
+          
+          // Compare date components directly
+          const isSameDay = 
+            expenseYear === year && 
+            expenseMonth === parseInt(month) && 
+            expenseDay === parseInt(day);
+          
+          console.log('Expense date check:', expense.id, expense.date, 
+                     'Year:', expenseYear, 'Month:', expenseMonth, 'Day:', expenseDay,
+                     'Is today:', isSameDay);
+          
+          return isSameDay;
+        });
+        
+        console.log('Today\'s expenses:', todaysExpenses.length);
+        setTodayExpenses(todaysExpenses);
+      } catch (error) {
+        console.error('Error fetching today\'s transactions:', error);
+      } finally {
+        setTodayTransactionsLoading(false);
+      }
+    };
+
+    fetchTodayTransactions();
+  }, [user?.id, authToken, lastRefreshed]);
 
   // Animation value for sidebar
   const sidebarAnim = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
@@ -92,7 +383,7 @@ export default function DriverDashboard() {
       await logout();
       router.replace('/auth/login');
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error('Error logging out:', error);
     }
   };
 
@@ -108,6 +399,8 @@ export default function DriverDashboard() {
     { icon: 'cash-outline', label: 'Earnings', route: '/dashboard/earnings' },
     { icon: 'list-outline', label: 'All Earnings', route: '/dashboard/all-earnings' },
     { icon: 'wallet-outline', label: 'Account Earnings', route: '/dashboard/account-earnings' },
+    { icon: 'receipt-outline', label: 'Expenses', route: '/dashboard/all-expenses' },
+    { icon: 'add-circle-outline', label: 'Add Expense', route: '/dashboard/add-expense' },
   ];
 
   // Add function to navigate to routes
@@ -116,27 +409,39 @@ export default function DriverDashboard() {
     setSidebarOpen(false);
   };
 
-  // Dashboard quick action buttons
-  const quickActions = [
-    { 
-      icon: 'cash-outline' as React.ComponentProps<typeof Ionicons>['name'], 
-      label: 'View Earnings', 
-      onPress: () => router.push('/dashboard/earnings' as any),
-      color: '#4CAF50'
-    },
-    {
-      icon: 'wallet-outline' as React.ComponentProps<typeof Ionicons>['name'],
-      label: 'Account Earnings',
-      onPress: () => router.push('/dashboard/account-earnings' as any),
-      color: '#2196F3'
-    },
-    { 
-      icon: 'add-circle-outline' as React.ComponentProps<typeof Ionicons>['name'], 
-      label: 'Add Earning', 
-      onPress: () => router.push('/dashboard/add-earning' as any),
-      color: '#FF9800'
+  // Format transaction date more naturally
+  const formatTransactionDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    // Set both dates to midnight for proper comparison
+    const compareDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const compareToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const compareYesterday = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
+    
+    // Format time
+    const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    // Check if date is today
+    if (compareDate.getTime() === compareToday.getTime()) {
+      return `Today, ${timeString}`;
     }
-  ];
+    
+    // Check if date is yesterday
+    if (compareDate.getTime() === compareYesterday.getTime()) {
+      return `Yesterday, ${timeString}`;
+    }
+    
+    // Check if date is in current year
+    if (date.getFullYear() === today.getFullYear()) {
+      return `${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date)}, ${timeString}`;
+    }
+    
+    // Return full date for older dates
+    return `${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(date)}, ${timeString}`;
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -164,11 +469,11 @@ export default function DriverDashboard() {
           <View style={styles.sidebarHeader}>
             <View style={styles.sidebarUserInfo}>
               <View style={styles.sidebarAvatar}>
-                <Text style={styles.avatarText}>{user?.name?.charAt(0) || 'D'}</Text>
+                <Text style={styles.avatarText}>{userData?.name?.charAt(0)}</Text>
               </View>
               <View style={styles.sidebarUserDetails}>
-                <Text style={styles.sidebarUserName}>{user?.name || 'Driver Name'}</Text>
-                <Text style={styles.sidebarUserRole}>{user?.role || 'Driver'}</Text>
+                <Text style={styles.sidebarUserName}>{userData?.name}</Text>
+                <Text style={styles.sidebarUserRole}>{userData?.role}</Text>
               </View>
             </View>
             <TouchableOpacity 
@@ -228,27 +533,89 @@ export default function DriverDashboard() {
           </TouchableOpacity>
           <Text style={styles.title}>Driver Dashboard</Text>
         </View>
-        <TouchableOpacity style={styles.notificationIcon}>
-          <Ionicons name="notifications" size={24} color="black" />
-          <View style={styles.notificationBadge} />
+        <TouchableOpacity 
+          style={styles.notificationIcon}
+          onPress={() => {
+            console.log('Navigating to settings page');
+            router.replace('/settings');
+          }}
+        >
+          <Ionicons name="settings-outline" size={24} color="black" />
         </TouchableOpacity>
       </View>
       
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Status card */}
-        <View style={styles.statusCard}>
-          <View style={styles.statusHeader}>
-            <Text style={styles.statusTitle}>Current Status</Text>
-            <View style={styles.activeIndicator}>
-              <View style={styles.activeStatusDot} />
-              <Text style={styles.activeStatusText}>On Duty</Text>
-            </View>
+      <ScrollView 
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Background Gradient */}
+        <LinearGradient
+          colors={['#f8f9fa', '#e9ecef']}
+          style={styles.backgroundGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        />
+
+        {/* Horizontal Cards */}
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.cardsContainer}
+        >
+          {/* Earnings Card */}
+          <View style={styles.cardContainer}>
+            <LinearGradient
+              colors={['#1a1a1a', '#000000']}
+              style={styles.cardGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <Image 
+                source={require('@/assets/logo/lightLogo.png')}
+                style={styles.cardLogo}
+                resizeMode="contain"
+              />
+              
+              <View style={styles.cardContent}>
+                <Text style={styles.amountLabel}>Total Earnings</Text>
+                {isLoading ? (
+                  <Text style={styles.amount}>Loading...</Text>
+                ) : (
+                  <Text style={styles.amount}>AED {totalEarnings.toFixed(2)}</Text>
+                )}
+              </View>
+
+              <Text style={styles.driverName}>{userData?.name || user?.name || 'Loading...'}</Text>
+            </LinearGradient>
           </View>
-          
-          <TouchableOpacity style={styles.dutyToggleButton}>
-            <Text style={styles.dutyToggleButtonText}>Go Off Duty</Text>
-          </TouchableOpacity>
-        </View>
+
+          {/* Expenses Card */}
+          <View style={styles.cardContainer}>
+            <LinearGradient
+              colors={['#1a1a1a', '#000000']}
+              style={styles.cardGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <Image 
+                source={require('@/assets/logo/lightLogo.png')}
+                style={styles.cardLogo}
+                resizeMode="contain"
+              />
+              
+              <View style={styles.cardContent}>
+                <Text style={styles.amountLabel}>Total Expenses</Text>
+                {isLoading ? (
+                  <Text style={styles.amount}>Loading...</Text>
+                ) : (
+                  <Text style={styles.amount}>AED {totalExpenses.toFixed(2)}</Text>
+                )}
+              </View>
+
+              <Text style={styles.driverName}>{userData?.name || user?.name || 'Loading...'}</Text>
+            </LinearGradient>
+          </View>
+        </ScrollView>
 
         <View style={styles.statsRow}>
           <View style={styles.statsCard}>
@@ -316,117 +683,218 @@ export default function DriverDashboard() {
 
         {/* Vehicle information */}
         <View style={styles.vehicleSection}>
-          <Text style={styles.sectionTitle}>My Vehicle</Text>
+          <Text style={styles.sectionTitle}>My Vehicles</Text>
           
-          <View style={styles.vehicleCard}>
-            <View style={styles.vehicleImageContainer}>
-              <Image 
-                source={{ uri: 'https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1470&q=80' }} 
-                style={styles.vehicleImage} 
-                resizeMode="cover"
-              />
+          {vehiclesLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#000" />
+              <Text style={styles.loadingText}>Loading vehicles...</Text>
             </View>
-            
-            <View style={styles.vehicleDetails}>
-              <Text style={styles.vehicleName}>Toyota Camry Hybrid</Text>
-              <Text style={styles.vehiclePlate}>License: XYZ-1234</Text>
-              
-              <View style={styles.vehicleStats}>
-                <View style={styles.vehicleStat}>
-                  <Ionicons name="speedometer-outline" size={18} color="#666" />
-                  <Text style={styles.vehicleStatText}>45,230 mi</Text>
+          ) : vehicles && vehicles.length > 0 ? (
+            vehicles.map((vehicle) => (
+              <View key={vehicle.id} style={styles.vehicleCard}>
+                <View style={styles.vehicleImageContainer}>
+                  <Image 
+                    source={{ uri: vehicle.image || 'https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?ixlib=rb-1.2.1&auto=format&fit=crop&w=1470&q=80' }} 
+                    style={styles.vehicleImage} 
+                    resizeMode="cover"
+                  />
                 </View>
                 
-                <View style={styles.vehicleStat}>
-                  <Ionicons name="water-outline" size={18} color="#666" />
-                  <Text style={styles.vehicleStatText}>Full Tank</Text>
-                </View>
-                
-                <View style={styles.vehicleStat}>
-                  <Ionicons name="options-outline" size={18} color="#38b000" />
-                  <Text style={styles.vehicleStatText}>Good Condition</Text>
+                <View style={styles.vehicleDetails}>
+                  <Text style={styles.vehicleName}>{vehicle.name}</Text>
+                  <Text style={styles.vehiclePlate}>License: {vehicle.plate}</Text>
+                  
+                  <View style={styles.vehicleStats}>
+                    <View style={styles.vehicleStat}>
+                      <Ionicons name="car-outline" size={18} color="#000" />
+                      <Text style={styles.vehicleStatText}>{vehicle.type || 'N/A'}</Text>
+                    </View>
+                    
+                    <View style={styles.vehicleStat}>
+                      <Ionicons name="color-palette-outline" size={18} color="#000" />
+                      <Text style={styles.vehicleStatText}>{vehicle.color || 'N/A'}</Text>
+                    </View>
+                    
+                    <View style={styles.vehicleStat}>
+                      <Ionicons name={
+                        vehicle.status === 'active' ? "checkmark-circle-outline" :
+                        vehicle.status === 'maintenance' ? "construct-outline" : "alert-circle-outline"
+                      } size={18} color={
+                        vehicle.status === 'active' ? "#4CAF50" :
+                        vehicle.status === 'maintenance' ? "#FF9800" : "#F44336"
+                      } />
+                      <Text style={[styles.vehicleStatText, {
+                        color: vehicle.status === 'active' ? "#4CAF50" :
+                               vehicle.status === 'maintenance' ? "#FF9800" : "#F44336"
+                      }]}>
+                        {vehicle.status === 'active' ? 'Active' :
+                         vehicle.status === 'maintenance' ? 'Maintenance' : 'Inactive'}
+                      </Text>
+                    </View>
+                  </View>
+                  
+                  {vehicle.location && (
+                    <View style={styles.vehicleDetailRow}>
+                      <Ionicons name="location-outline" size={18} color="#000" />
+                      <Text style={styles.vehicleDetailText}>Location: {vehicle.location}</Text>
+                    </View>
+                  )}
+                  
+                  {vehicle.model && (
+                    <View style={styles.vehicleDetailRow}>
+                      <Ionicons name="calendar-outline" size={18} color="#000" />
+                      <Text style={styles.vehicleDetailText}>Model: {vehicle.model}</Text>
+                    </View>
+                  )}
+                  
+                  {vehicle.ownership && (
+                    <View style={styles.vehicleDetailRow}>
+                      <Ionicons name="business-outline" size={18} color="#000" />
+                      <Text style={styles.vehicleDetailText}>Ownership: {vehicle.ownership}</Text>
+                    </View>
+                  )}
                 </View>
               </View>
+            ))
+          ) : (
+            <View style={styles.noVehiclesContainer}>
+              <Ionicons name="car-outline" size={60} color="#ccc" />
+              <Text style={styles.noVehiclesText}>No vehicles assigned</Text>
             </View>
-          </View>
+          )}
         </View>
         
-        {/* Upcoming schedules */}
-        <View style={styles.scheduleSection}>
+        {/* Today's Transactions */}
+        <View style={styles.transactionsSection}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Today's Schedule</Text>
-            <TouchableOpacity style={styles.viewAllButton}>
-              <Text style={styles.viewAllText}>View All</Text>
-              <Ionicons name="chevron-forward" size={14} color="#000000" />
-            </TouchableOpacity>
-          </View>
-          
-          <View style={styles.scheduleList}>
-            <View style={styles.scheduleItem}>
-              <View style={styles.scheduleTime}>
-                <Text style={styles.scheduleTimeText}>09:00 AM</Text>
-                <View style={styles.scheduleStatusIndicator} />
-              </View>
-              
-              <View style={styles.scheduleContent}>
-                <Text style={styles.scheduleTitle}>Pickup at Downtown Station</Text>
-                <View style={styles.scheduleLocation}>
-                  <Ionicons name="location-outline" size={14} color="#666" />
-                  <Text style={styles.scheduleLocationText}>123 Main Street</Text>
-                </View>
-                <View style={styles.scheduleActions}>
-                  <TouchableOpacity style={styles.scheduleButton}>
-                    <Text style={styles.scheduleButtonText}>Start</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[styles.scheduleButton, styles.scheduleButtonOutline]}>
-                    <Text style={[styles.scheduleButtonText, styles.scheduleButtonTextOutline]}>Navigate</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-            
-            <View style={styles.scheduleItem}>
-              <View style={styles.scheduleTime}>
-                <Text style={styles.scheduleTimeText}>11:30 AM</Text>
-                <View style={[styles.scheduleStatusIndicator, styles.schedulePending]} />
-              </View>
-              
-              <View style={styles.scheduleContent}>
-                <Text style={styles.scheduleTitle}>Airport Transfer</Text>
-                <View style={styles.scheduleLocation}>
-                  <Ionicons name="location-outline" size={14} color="#666" />
-                  <Text style={styles.scheduleLocationText}>International Terminal</Text>
-                </View>
-                <View style={styles.scheduleActions}>
-                  <TouchableOpacity style={[styles.scheduleButton, styles.scheduleButtonDisabled]}>
-                    <Text style={[styles.scheduleButtonText, styles.scheduleButtonTextDisabled]}>Start</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[styles.scheduleButton, styles.scheduleButtonOutline]}>
-                    <Text style={[styles.scheduleButtonText, styles.scheduleButtonTextOutline]}>Navigate</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-          </View>
-        </View>
-        
-        {/* Quick Actions */}
-        <View style={styles.quickActionsSection}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          
-          <View style={styles.quickActionsGrid}>
-            {quickActions.map((action, index) => (
+            <Text style={styles.sectionTitle}>Today's Transactions</Text>
+            <View style={styles.transactionFilterContainer}>
               <TouchableOpacity 
-                key={index}
-                style={[styles.quickActionButton, { backgroundColor: action.color }]}
-                onPress={action.onPress}
+                style={styles.filterButton}
+                onPress={() => setShowTransactionFilterDropdown(!showTransactionFilterDropdown)}
               >
-                <Ionicons name={action.icon} size={24} color="white" />
-                <Text style={styles.quickActionText}>{action.label}</Text>
+                <Text style={styles.filterText}>{transactionFilter}</Text>
+                <Ionicons name="chevron-down" size={14} color="#000" />
               </TouchableOpacity>
-            ))}
-      </View>
-    </View>
+              
+              {/* Filter Dropdown */}
+              {showTransactionFilterDropdown && (
+                <View style={styles.filterDropdown}>
+                  <TouchableOpacity 
+                    style={styles.filterOption}
+                    onPress={() => {
+                      setTransactionFilter('All');
+                      setShowTransactionFilterDropdown(false);
+                    }}
+                  >
+                    <Text style={[styles.filterOptionText, transactionFilter === 'All' && styles.activeFilterText]}>
+                      All
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.filterOption}
+                    onPress={() => {
+                      setTransactionFilter('Earnings');
+                      setShowTransactionFilterDropdown(false);
+                    }}
+                  >
+                    <Text style={[styles.filterOptionText, transactionFilter === 'Earnings' && styles.activeFilterText]}>
+                      Earnings
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.filterOption}
+                    onPress={() => {
+                      setTransactionFilter('Expenses');
+                      setShowTransactionFilterDropdown(false);
+                    }}
+                  >
+                    <Text style={[styles.filterOptionText, transactionFilter === 'Expenses' && styles.activeFilterText]}>
+                      Expenses
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          </View>
+          
+          {todayTransactionsLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color="#000" />
+              <Text style={styles.loadingText}>Loading transactions...</Text>
+            </View>
+          ) : (
+            <View style={styles.transactionsContainer}>
+              {/* Combined Transactions */}
+              <View style={styles.transactionSection}>
+                {todayEarnings.length > 0 || todayExpenses.length > 0 ? (
+                  <>
+                    {/* Earnings */}
+                    {(transactionFilter === 'All' || transactionFilter === 'Earnings') && 
+                      todayEarnings.map((earning, index) => (
+                        <React.Fragment key={`earning-${earning.id || index}`}>
+                          <View style={styles.transactionItem}>
+                            <View style={styles.transactionLeft}>
+                              <View style={styles.transactionIconContainer}>
+                                <Ionicons name="card-outline" size={20} color="#333" />
+                              </View>
+                              <View style={styles.transactionDetails}>
+                                <Text style={styles.transactionTitle}>
+                                  {earning.type === 'Online' ? 'Online Payment' : 
+                                   earning.type === 'Cash' ? 'Cash Payment' : 
+                                   earning.type === 'Pocket Slipt' ? 'Pocket Slipt' : 'Earning'}
+                                </Text>
+                                <Text style={styles.transactionSubtitle}>
+                                  {formatTransactionDate(earning.date)}
+                                </Text>
+                              </View>
+                            </View>
+                            <Text style={styles.transactionAmount}>
+                              AED {typeof earning.amount === 'string' ? parseFloat(earning.amount).toFixed(2) : Number(earning.amount).toFixed(2)}
+                            </Text>
+                          </View>
+                          {/* Add divider if not the last item */}
+                          {(index < todayEarnings.length - 1 || 
+                             (transactionFilter === 'All' && todayExpenses.length > 0)) && 
+                              <View style={styles.divider} />}
+                        </React.Fragment>
+                    ))}
+                  
+                    {/* Expenses */}
+                    {(transactionFilter === 'All' || transactionFilter === 'Expenses') && 
+                      todayExpenses.map((expense, index) => (
+                        <React.Fragment key={`expense-${expense.id || index}`}>
+                          <View style={styles.transactionItem}>
+                            <View style={styles.transactionLeft}>
+                              <View style={[styles.transactionIconContainer, styles.expenseIconContainer]}>
+                                <Ionicons name="receipt-outline" size={20} color="#333" />
+                              </View>
+                              <View style={styles.transactionDetails}>
+                                <Text style={styles.transactionTitle}>
+                                  {expense.category || 'Expense'}
+                                </Text>
+                                <Text style={styles.transactionSubtitle}>
+                                  {formatTransactionDate(expense.date)}
+                                </Text>
+                              </View>
+                            </View>
+                            <Text style={[styles.transactionAmount, styles.expenseAmount]}>
+                              -AED {typeof expense.amount === 'string' ? parseFloat(expense.amount).toFixed(2) : Number(expense.amount).toFixed(2)}
+                            </Text>
+                          </View>
+                          {/* Add divider if not the last item */}
+                          {index < todayExpenses.length - 1 && <View style={styles.divider} />}
+                        </React.Fragment>
+                    ))}
+                  </>
+                ) : (
+                  <Text style={styles.noTransactionsText}>No transactions today</Text>
+                )}
+              </View>
+            </View>
+          )}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -458,15 +926,6 @@ const styles = StyleSheet.create({
   },
   notificationIcon: {
     position: 'relative',
-  },
-  notificationBadge: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'red',
   },
   // Sidebar styles
   overlay: {
@@ -647,16 +1106,16 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     paddingHorizontal: 20,
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 10,
-  },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 15,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#000',
   },
   viewAllButton: {
     flexDirection: 'row',
@@ -664,7 +1123,8 @@ const styles = StyleSheet.create({
   },
   viewAllText: {
     fontSize: 14,
-    color: '#000000',
+    color: '#3498db',
+    marginRight: 4,
   },
   periodToggle: {
     flexDirection: 'row',
@@ -727,158 +1187,272 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   vehicleSection: {
-    marginBottom: 20,
+    marginTop: 24,
+    marginBottom: 16,
     paddingHorizontal: 20,
   },
   vehicleCard: {
-    backgroundColor: '#f5f5f5',
-    borderRadius: 10,
+    backgroundColor: 'transparent',
+    borderRadius: 12,
+    marginBottom: 16,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    paddingBottom: 12,
   },
   vehicleImageContainer: {
     width: '100%',
-    height: 150,
+    height: 160,
+    overflow: 'hidden',
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
   },
   vehicleImage: {
     width: '100%',
     height: '100%',
   },
   vehicleDetails: {
-    padding: 15,
+    padding: 16,
   },
   vehicleName: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 5,
+    marginBottom: 4,
   },
   vehiclePlate: {
     fontSize: 14,
     color: '#666',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   vehicleStats: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 5,
+    justifyContent: 'flex-start',
+    flexWrap: 'wrap',
+    marginBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    paddingBottom: 8,
   },
   vehicleStat: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 8,
+    marginRight: 16,
   },
   vehicleStatText: {
-    fontSize: 12,
+    fontSize: 14,
+    color: '#333',
+    marginLeft: 5,
+  },
+  vehicleDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  vehicleDetailText: {
+    fontSize: 14,
     color: '#666',
     marginLeft: 5,
   },
-  scheduleSection: {
+  transactionsSection: {
     marginBottom: 20,
     paddingHorizontal: 20,
   },
-  scheduleList: {
-    backgroundColor: '#f5f5f5',
+  transactionsContainer: {
+    backgroundColor: 'transparent',
     borderRadius: 10,
     paddingVertical: 10,
-  },
-  scheduleItem: {
-    flexDirection: 'row',
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  scheduleTime: {
-    width: 70,
-    alignItems: 'center',
-  },
-  scheduleTimeText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    marginBottom: 5,
-  },
-  scheduleStatusIndicator: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#38b000',
-  },
-  schedulePending: {
-    backgroundColor: '#ffd60a',
-  },
-  scheduleContent: {
-    flex: 1,
-    paddingLeft: 10,
-  },
-  scheduleTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    marginBottom: 5,
-  },
-  scheduleLocation: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  scheduleLocationText: {
-    fontSize: 12,
-    color: '#666',
-    marginLeft: 5,
-  },
-  scheduleActions: {
-    flexDirection: 'row',
-  },
-  scheduleButton: {
-    backgroundColor: '#000000',
-    borderRadius: 5,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    marginRight: 10,
-  },
-  scheduleButtonOutline: {
-    backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: '#000000',
+    borderColor: '#e0e0e0',
   },
-  scheduleButtonDisabled: {
-    backgroundColor: '#cccccc',
+  transactionSection: {
+    padding: 12,
+    marginBottom: 5,
+    backgroundColor: 'transparent',
   },
-  scheduleButtonText: {
-    fontSize: 12,
-    color: 'white',
+  transactionSectionTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 12,
+  },
+  transactionItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    backgroundColor: 'transparent',
+    paddingVertical: 8,
+    paddingHorizontal: 5,
+  },
+  transactionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  transactionIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#e6e6e6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  expenseIconContainer: {
+    backgroundColor: '#ffe6e6',
+  },
+  transactionDetails: {
+    flex: 1,
+  },
+  transactionTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 2,
+  },
+  transactionSubtitle: {
+    fontSize: 13,
+    color: '#777',
+  },
+  transactionAmount: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#4CAF50',
+  },
+  expenseAmount: {
+    color: '#F44336',
+  },
+  noTransactionsText: {
+    fontSize: 14,
+    color: '#777',
+    textAlign: 'center',
+    paddingVertical: 10,
+  },
+  content: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  backgroundGradient: {
+    display: 'none', // Hide the gradient background
+  },
+  cardsContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+  },
+  cardContainer: {
+    width: width - 80, // Reduced width to show next card
+    height: 200,
+    borderRadius: 20,
+    overflow: 'hidden',
+    marginRight: 16, // Space between cards
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+      },
+      android: {
+        elevation: 5,
+      },
+    }),
+  },
+  cardGradient: {
+    flex: 1,
+    padding: 24,
+  },
+  cardLogo: {
+    width: 60,
+    height: 40,
+    tintColor: '#ffffff',
+    opacity: 0.8,
+  },
+  cardContent: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  amountLabel: {
+    color: '#ffffff80',
+    fontSize: 16,
+    marginBottom: 8,
     fontWeight: '500',
   },
-  scheduleButtonTextOutline: {
-    color: '#000000',
+  amount: {
+    color: '#ffffff',
+    fontSize: 36,
+    fontWeight: 'bold',
   },
-  scheduleButtonTextDisabled: {
+  driverName: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'right',
+  },
+  loadingContainer: {
+    padding: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
     color: '#666',
   },
-  quickActionsSection: {
-    marginBottom: 30,
-    paddingHorizontal: 20,
-  },
-  quickActionsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  quickActionButton: {
-    backgroundColor: '#ffffff',
-    borderRadius: 8,
-    padding: 15,
-    alignItems: 'center',
+  noVehiclesContainer: {
+    padding: 40,
     justifyContent: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    width: '48%',
-    marginBottom: 10,
-    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
   },
-  quickActionText: {
-    marginLeft: 8,
+  noVehiclesText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
+  },
+  transactionFilterContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  filterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+  },
+  filterText: {
     fontSize: 14,
-    fontWeight: '500',
-    color: '#ffffff',
+    color: '#000',
+    marginRight: 4,
+  },
+  filterDropdown: {
+    position: 'absolute',
+    top: 40,
+    right: 0,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 10,
+    zIndex: 3,
+  },
+  filterOption: {
+    padding: 8,
+    marginBottom: 5,
+  },
+  filterOptionText: {
+    fontSize: 14,
+    color: '#000',
+  },
+  activeFilterText: {
+    fontWeight: 'bold',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#e0e0e0',
+    marginVertical: 8,
   },
 }); 

@@ -46,6 +46,16 @@ function RootLayoutNav() {
       return;
     }
     
+    // Do not redirect if on settings page
+    if (pathname === '/settings') {
+      return;
+    }
+    
+    // Do not redirect if on vehicles pages
+    if (pathname.includes('/vehicles')) {
+      return;
+    }
+    
     // Only redirect when not loading
     if (!loading) {
       if (!isAuthenticated) {
@@ -71,6 +81,9 @@ function RootLayoutNav() {
       <Stack.Screen name="welcome" options={{ headerShown: false }} />
       <Stack.Screen name="auth/login" options={{ headerShown: false }} />
       <Stack.Screen name="auth/signup" options={{ headerShown: false }} />
+      <Stack.Screen name="settings" options={{ headerShown: false }} />
+      <Stack.Screen name="vehicles" options={{ headerShown: false }} />
+      <Stack.Screen name="vehicles/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="+not-found" />
       <Stack.Screen name="dashboard" />
     </Stack>

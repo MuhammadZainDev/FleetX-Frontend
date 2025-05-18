@@ -5,7 +5,7 @@
 // - Your actual machine's IP for physical devices
 const getBaseUrl = () => {
   // For development, you can change this to your machine's IP address
-  const LOCAL_IP = '10.0.91.120'; // Change this to your computer's IP address
+  const LOCAL_IP = '192.168.0.103'; // Change this to your computer's IP address
   const PORT = '5000';
   
   // You can use different IPs based on platform if needed
@@ -38,15 +38,33 @@ export const ENDPOINTS = {
     CREATE: '/earnings',
     UPDATE: '/earnings/:id',
     DELETE: '/earnings/:id',
+  },
+  EXPENSE: {
+    GET_ALL: '/expenses',
+    GET_ONE: '/expenses/:id',
+    GET_SUMMARY: '/expenses/driver/:driverId/summary',
+    CREATE: '/expenses',
+    UPDATE: '/expenses/:id',
+    DELETE: '/expenses/:id',
+  },
+  VEHICLE: {
+    GET_ALL: '/vehicles',
+    GET_ONE: '/vehicles/:id',
+    CREATE: '/vehicles',
+    UPDATE: '/vehicles/:id',
+    DELETE: '/vehicles/:id',
+    GET_AVAILABLE_DRIVERS: '/vehicles/drivers/available'
   }
 };
 
 // Request headers
-export const getHeaders = (token = null) => {
-  const headers = {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json',
-  };
+export const getHeaders = (token = null, isMultipart = false) => {
+  const headers = {};
+  
+  if (!isMultipart) {
+    headers['Content-Type'] = 'application/json';
+    headers['Accept'] = 'application/json';
+  }
 
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;

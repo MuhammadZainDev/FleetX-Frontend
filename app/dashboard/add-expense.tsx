@@ -16,15 +16,15 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
-import { createEarning } from '@/services/earning.service';
+import { createExpense } from '@/services/expense.service';
 
-export default function AddEarningScreen() {
+export default function AddExpenseScreen() {
   const { token, user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [formData, setFormData] = useState({
     amount: '',
-    type: 'Cash', // Default type
+    category: 'Other', // Default category
     note: '',
     driverId: '', // Will be auto-filled based on user role
     date: new Date().toISOString().split('T')[0] // Today's date in YYYY-MM-DD format
@@ -35,7 +35,7 @@ export default function AddEarningScreen() {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedDay, setSelectedDay] = useState(new Date().getDate());
   
-  // Protect route - only Admin can access this page
+  // Protect route - only Driver or Admin can access this page
   useEffect(() => {
     if (!user) {
       router.replace('/auth/login');
@@ -59,15 +59,15 @@ export default function AddEarningScreen() {
   };
 
   const validateForm = () => {
-    const { amount, type, driverId } = formData;
+    const { amount, note, driverId } = formData;
     
     if (!amount.trim() || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
       Alert.alert('Error', 'Please enter a valid amount');
       return false;
     }
     
-    if (!type) {
-      Alert.alert('Error', 'Payment type is required');
+    if (!note.trim()) {
+      Alert.alert('Error', 'Note is required');
       return false;
     }
     
@@ -106,25 +106,25 @@ export default function AddEarningScreen() {
         date: formattedDate
       };
       
-      console.log('Submitting earning with data:', data);
+      console.log('Submitting expense with data:', data);
       
-      const response = await createEarning(data);
-      console.log('Earning created response:', response);
+      const response = await createExpense(data, token);
+      console.log('Expense created response:', response);
       
       // Try to refresh the driver dashboard if function is available
       if (global && (global as any).refreshDriverDashboard) {
-        console.log('Refreshing driver dashboard after adding earning');
+        console.log('Refreshing driver dashboard after adding expense');
         (global as any).refreshDriverDashboard();
       }
       
       Alert.alert(
         'Success',
-        'Earning record created successfully',
+        'Expense record created successfully',
         [{ text: 'OK', onPress: () => router.push('/dashboard/driver' as any) }]
       );
     } catch (error: any) {
-      console.error('Error creating earning:', error);
-      Alert.alert('Error', error.message || 'Failed to create earning record');
+      console.error('Error creating expense:', error);
+      Alert.alert('Error', error.message || 'Failed to create expense record');
     } finally {
       setLoading(false);
     }
@@ -138,6 +138,12 @@ export default function AddEarningScreen() {
       month: 'short',
       day: 'numeric'
     });
+  };
+
+  // Function to handle back button
+  const handleBackButton = () => {
+    // Navigate to the expenses list instead of using router.back()
+    router.push('/dashboard/all-expenses' as any);
   };
 
   // Function to manually handle date entry
@@ -235,31 +241,20 @@ export default function AddEarningScreen() {
     }
     return days;
   };
-  
-  // When opening the modal, use setTimeout to scroll to the selected values
-  useEffect(() => {
-    if (showDatePicker) {
-      // Small delay to ensure the scroll views are rendered
-      setTimeout(() => {
-        // You would add refs to each ScrollView and use scrollTo here
-        // but since we don't have refs in this edit, we'll just make sure
-        // there are enough items to scroll
-      }, 100);
-    }
-  }, [showDatePicker]);
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
       
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity 
           style={styles.backButton}
-          onPress={() => router.push('/dashboard/earnings' as any)}
+          onPress={() => router.push('/dashboard/all-expenses' as any)}
         >
           <Ionicons name="arrow-back" size={24} color="#000" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Add Earning</Text>
+        <Text style={styles.headerTitle}>Add Expense</Text>
         <View style={styles.placeholder} />
       </View>
       
@@ -283,34 +278,34 @@ export default function AddEarningScreen() {
             />
           </View>
         </View>
-        
-        {/* Payment Type Selector */}
+
+        {/* Category Selector */}
         <View style={styles.formGroup}>
-          <Text style={styles.label}>Payment Type</Text>
-          <View style={styles.paymentTypeContainer}>
-            <View style={styles.paymentTypeRow}>
+          <Text style={styles.label}>Category</Text>
+          <View style={styles.categoryContainer}>
+            <View style={styles.categoryRow}>
               {[
-                { type: 'Cash', icon: 'cash-outline' },
-                { type: 'Online', icon: 'card-outline' },
+                { type: 'Fuel', icon: 'flame-outline' },
+                { type: 'Maintenance', icon: 'construct-outline' },
               ].map(({ type, icon }) => (
                 <TouchableOpacity
                   key={type}
                   style={[
-                    styles.paymentTypeButton,
-                    formData.type === type && styles.activePaymentTypeButton
+                    styles.categoryButton,
+                    formData.category === type && styles.activeCategoryButton
                   ]}
-                  onPress={() => handleInputChange('type', type)}
+                  onPress={() => handleInputChange('category', type)}
                 >
                   <Ionicons 
                     name={icon as any} 
                     size={20} 
-                    color={formData.type === type ? "#fff" : "#666"} 
-                    style={styles.paymentTypeIcon}
+                    color={formData.category === type ? "#fff" : "#666"} 
+                    style={styles.categoryIcon}
                   />
                   <Text 
                     style={[
-                      styles.paymentTypeText,
-                      formData.type === type && styles.activePaymentTypeText
+                      styles.categoryText,
+                      formData.category === type && styles.activeCategoryText
                     ]}
                   >
                     {type}
@@ -318,27 +313,57 @@ export default function AddEarningScreen() {
                 </TouchableOpacity>
               ))}
             </View>
-            <View style={styles.paymentTypeRow}>
+            <View style={styles.categoryRow}>
+              {[
+                { type: 'Insurance', icon: 'shield-outline' },
+                { type: 'Parking', icon: 'car-outline' },
+              ].map(({ type, icon }) => (
+                <TouchableOpacity
+                  key={type}
+                  style={[
+                    styles.categoryButton,
+                    formData.category === type && styles.activeCategoryButton
+                  ]}
+                  onPress={() => handleInputChange('category', type)}
+                >
+                  <Ionicons 
+                    name={icon as any} 
+                    size={20} 
+                    color={formData.category === type ? "#fff" : "#666"} 
+                    style={styles.categoryIcon}
+                  />
+                  <Text 
+                    style={[
+                      styles.categoryText,
+                      formData.category === type && styles.activeCategoryText
+                    ]}
+                  >
+                    {type}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={styles.categoryRow}>
               <TouchableOpacity
                 style={[
-                  styles.paymentTypeButton,
-                  formData.type === 'Pocket Slipt' && styles.activePaymentTypeButton
+                  styles.categoryButton,
+                  formData.category === 'Other' && styles.activeCategoryButton
                 ]}
-                onPress={() => handleInputChange('type', 'Pocket Slipt')}
+                onPress={() => handleInputChange('category', 'Other')}
               >
                 <Ionicons 
-                  name="wallet-outline" 
+                  name="cart-outline" 
                   size={20} 
-                  color={formData.type === 'Pocket Slipt' ? "#fff" : "#666"} 
-                  style={styles.paymentTypeIcon}
+                  color={formData.category === 'Other' ? "#fff" : "#666"} 
+                  style={styles.categoryIcon}
                 />
                 <Text 
                   style={[
-                    styles.paymentTypeText,
-                    formData.type === 'Pocket Slipt' && styles.activePaymentTypeText
+                    styles.categoryText,
+                    formData.category === 'Other' && styles.activeCategoryText
                   ]}
                 >
-                  Pocket Slipt
+                  Other
                 </Text>
               </TouchableOpacity>
               <View style={styles.emptyButton}></View>
@@ -366,9 +391,24 @@ export default function AddEarningScreen() {
           </View>
         )}
         
+        {/* Date Input */}
+        <View style={styles.formGroup}>
+          <Text style={styles.label}>Date</Text>
+          <TouchableOpacity 
+            style={styles.inputContainer}
+            onPress={openDatePicker}
+          >
+            <Ionicons name="calendar-outline" size={20} color="#666" style={styles.inputIcon} />
+            <Text style={[styles.input, !formData.date && styles.placeholderText]}>
+              {formData.date ? formatDate(formData.date) : 'Select date'}
+            </Text>
+            <Ionicons name="chevron-down" size={16} color="#666" style={styles.dateChevron} />
+          </TouchableOpacity>
+        </View>
+        
         {/* Note Input */}
         <View style={styles.formGroup}>
-          <Text style={styles.label}>Note (Optional)</Text>
+          <Text style={styles.label}>Note</Text>
           <View style={[styles.inputContainer, styles.textAreaContainer]}>
             <Ionicons 
               name="document-text-outline" 
@@ -378,7 +418,7 @@ export default function AddEarningScreen() {
             />
             <TextInput
               style={[styles.input, styles.textArea]}
-              placeholder="Add a note about this payment"
+              placeholder="Add a note about this expense"
               multiline
               numberOfLines={4}
               value={formData.note}
@@ -386,19 +426,6 @@ export default function AddEarningScreen() {
               placeholderTextColor="#999"
             />
           </View>
-        </View>
-        
-        {/* Date Picker */}
-        <View style={styles.formGroup}>
-          <Text style={styles.label}>Date</Text>
-          <TouchableOpacity 
-            style={styles.inputContainer}
-            onPress={openDatePicker}
-          >
-            <Ionicons name="calendar-outline" size={20} color="#666" style={styles.inputIcon} />
-            <Text style={styles.dateText}>{formatDate(formData.date)}</Text>
-            <Ionicons name="chevron-down" size={16} color="#666" style={styles.dateChevron} />
-          </TouchableOpacity>
         </View>
         
         {/* Submit Button */}
@@ -415,13 +442,13 @@ export default function AddEarningScreen() {
           ) : (
             <>
               <Ionicons name="add-circle-outline" size={20} color="#fff" style={{marginRight: 8}} />
-              <Text style={styles.submitButtonText}>Create Earning Record</Text>
+              <Text style={styles.submitButtonText}>Create Expense Record</Text>
             </>
           )}
         </TouchableOpacity>
       </ScrollView>
-
-      {/* Custom Date Picker Modal */}
+      
+      {/* Date Picker Modal */}
       <Modal
         visible={showDatePicker}
         transparent={true}
@@ -550,7 +577,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0'
+    borderBottomColor: '#f0f0f0',
   },
   backButton: {
     padding: 8,
@@ -616,15 +643,15 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginLeft: 4,
   },
-  paymentTypeContainer: {
+  categoryContainer: {
     marginBottom: 10,
   },
-  paymentTypeRow: {
+  categoryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 10,
   },
-  paymentTypeButton: {
+  categoryButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -639,37 +666,38 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 1,
   },
+  activeCategoryButton: {
+    backgroundColor: '#000',
+  },
+  categoryIcon: {
+    marginRight: 8,
+  },
+  categoryText: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  activeCategoryText: {
+    color: '#fff',
+  },
   emptyButton: {
     flex: 1,
     marginHorizontal: 4,
   },
-  paymentTypeIcon: {
-    marginRight: 6,
+  dateChevron: {
+    marginLeft: 8,
   },
-  activePaymentTypeButton: {
-    backgroundColor: '#000',
-  },
-  paymentTypeText: {
-    color: '#333',
-    fontWeight: '500',
-    fontSize: 14,
-  },
-  activePaymentTypeText: {
-    color: '#fff',
+  placeholderText: {
+    color: '#999',
   },
   submitButton: {
-    flexDirection: 'row',
     backgroundColor: '#000',
     borderRadius: 12,
     paddingVertical: 16,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    marginTop: 20,
   },
   disabledButton: {
     opacity: 0.7,
@@ -679,15 +707,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  dateText: {
-    flex: 1,
-    fontSize: 16,
-    color: '#333',
-  },
-  dateChevron: {
-    marginLeft: 'auto',
-  },
-
+  
   // Modal DatePicker Styles
   modalOverlay: {
     flex: 1,

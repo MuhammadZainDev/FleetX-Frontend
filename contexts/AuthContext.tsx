@@ -1,10 +1,11 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { router } from 'expo-router';
-import { login, signup, logout, getCurrentUser, isLoggedIn } from '@/services/auth.service';
+import { login, signup, logout, getCurrentUser, isLoggedIn, getProfile } from '@/services/auth.service';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Constants
 const TOKEN_KEY = 'fleetx_auth_token';
+const USER_KEY = 'fleetx_user';
 
 // Types
 type User = {
@@ -29,10 +30,12 @@ type AuthContextType = {
   loading: boolean;
   isAuthenticated: boolean;
   token: string | null;
+  authToken: string | null;
   login: (email: string, password: string) => Promise<void>;
   signup: (data: SignupData) => Promise<void>;
   logout: () => Promise<void>;
   navigateByRole: () => void;
+  refreshUser: () => Promise<void>;
 };
 
 // Default context
@@ -41,10 +44,12 @@ const defaultContext: AuthContextType = {
   loading: true,
   isAuthenticated: false,
   token: null,
+  authToken: null,
   login: async () => {},
   signup: async () => {},
   logout: async () => {},
   navigateByRole: () => {},
+  refreshUser: async () => {},
 };
 
 // Create context
@@ -65,6 +70,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     router.replace('/(tabs)');
     
     // Role-specific functionality will be handled in each dashboard component
+  };
+
+  // Function to refresh user data from backend
+  const refreshUser = async () => {
+    try {
+      // Get the latest token
+      const currentToken = await AsyncStorage.getItem(TOKEN_KEY);
+      if (!currentToken) {
+        setIsAuthenticated(false);
+        setUser(null);
+        return;
+      }
+      
+      // Fetch fresh user data from the backend
+      const profileData = await getProfile();
+      
+      if (profileData && profileData.user) {
+        // Update local storage
+        await AsyncStorage.setItem(USER_KEY, JSON.stringify(profileData.user));
+        
+        // Update state
+        setUser(profileData.user);
+        setIsAuthenticated(true);
+      }
+    } catch (error) {
+      console.error('Error refreshing user data:', error);
+    }
   };
 
   // Load user and token on mount
@@ -89,6 +121,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setUser(userData);
             setToken(storedToken);
             setIsAuthenticated(true);
+            
+            // Refresh user data from backend to ensure it's up to date
+            await refreshUser();
           }
         } else {
           setUser(null);
@@ -183,10 +218,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loading,
     isAuthenticated,
     token,
+    authToken: token,
     login: handleLogin,
     signup: handleSignup,
     logout: handleLogout,
     navigateByRole,
+    refreshUser,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
