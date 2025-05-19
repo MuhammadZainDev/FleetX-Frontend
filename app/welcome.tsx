@@ -1,18 +1,44 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, View, Image, StatusBar, SafeAreaView, Text } from 'react-native';
 import { router } from 'expo-router';
 
 import { ThemedText } from '@/components/ThemedText';
 import { Button } from '@/components/ui/Button';
 import { Colors } from '@/constants/Colors';
+import { setWelcomeScreenAsSeen } from '@/utils/storage';
 
 export default function WelcomeScreen() {
-  const handleLogin = () => {
-    router.push('/auth/login');
+  const [loadingLogin, setLoadingLogin] = useState(false);
+  const [loadingSignup, setLoadingSignup] = useState(false);
+
+  const handleLogin = async () => {
+    // Show loading state
+    setLoadingLogin(true);
+    
+    try {
+      // Mark welcome screen as seen
+      await setWelcomeScreenAsSeen();
+      router.push('/auth/login');
+    } catch (error) {
+      console.error('Error navigating to login:', error);
+    } finally {
+      setLoadingLogin(false);
+    }
   };
 
-  const handleSignup = () => {
-    router.push('/auth/signup');
+  const handleSignup = async () => {
+    // Show loading state
+    setLoadingSignup(true);
+    
+    try {
+      // Mark welcome screen as seen
+      await setWelcomeScreenAsSeen();
+      router.push('/auth/signup');
+    } catch (error) {
+      console.error('Error navigating to signup:', error);
+    } finally {
+      setLoadingSignup(false);
+    }
   };
 
   return (
@@ -51,13 +77,15 @@ export default function WelcomeScreen() {
           title="Login" 
           onPress={handleLogin} 
           fullWidth 
-          type="primary" 
+          type="primary"
+          loading={loadingLogin}
         />
         <Button 
           title="Create Account" 
           onPress={handleSignup} 
           fullWidth 
-          type="outline" 
+          type="outline"
+          loading={loadingSignup}
         />
       </View>
     </SafeAreaView>

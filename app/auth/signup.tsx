@@ -40,6 +40,7 @@ export default function SignupScreen() {
       };
       
       // Call signup from auth context
+      // Loading state is handled automatically by the auth context
       await signup(userData);
       
       // After signup, redirect to login page with a notification parameter
@@ -119,7 +120,6 @@ export default function SignupScreen() {
               onPress={handleSignup}
               loading={loading}
               fullWidth
-              icon={true}
               outlined
             />
 

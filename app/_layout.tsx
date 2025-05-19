@@ -8,6 +8,7 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { ToastProvider } from '@/contexts/ToastContext';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -23,8 +24,10 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={DefaultTheme}>
       <AuthProvider>
-        <RootLayoutNav />
-        <StatusBar style="dark" />
+        <ToastProvider>
+          <RootLayoutNav />
+          <StatusBar style="dark" />
+        </ToastProvider>
       </AuthProvider>
     </ThemeProvider>
   );

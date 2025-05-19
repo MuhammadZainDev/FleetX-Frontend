@@ -103,7 +103,7 @@ export default function AllEarningsScreen() {
   
   // Format currency
   const formatCurrency = (amount: number | string) => {
-    return `$${parseFloat(amount.toString()).toFixed(2)}`;
+    return `AED ${parseFloat(amount.toString()).toFixed(2)}`;
   };
   
   // Format date 

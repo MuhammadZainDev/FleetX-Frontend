@@ -43,6 +43,11 @@ export function Button({
   ];
 
   const iconColor = outlined || type === 'outline' ? '#ffffff' : '#ffffff';
+  
+  // Force white text for loading state, regardless of button type
+  const loadingTextStyle = type === 'outline' && !outlined ? 
+    { color: '#000000', fontWeight: 'bold', fontSize: 16 } : 
+    { color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 };
 
   return (
     <TouchableOpacity 
@@ -52,11 +57,14 @@ export function Button({
       activeOpacity={0.8}
     >
       {loading ? (
-        <ActivityIndicator color={outlined || type === 'outline' ? '#000000' : '#ffffff'} />
+        <Text style={loadingTextStyle}>
+          Please wait...
+        </Text>
       ) : (
         <View style={styles.buttonContent}>
           <Text style={textStyle}>{title}</Text>
-          {icon && <ArrowIcon size={28} color={iconColor} />}
+          {/* Only show icon if icon prop is true and it's not a login/auth button */}
+          {icon && !title.includes('Login') && !title.includes('Create') && <ArrowIcon size={28} color={iconColor} />}
         </View>
       )}
     </TouchableOpacity>
@@ -72,6 +80,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     minWidth: 120,
+    minHeight: 56, // Ensure consistent height even during loading
   },
   fullWidth: {
     width: '100%',
@@ -118,5 +127,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-  },
+  }
 }); 

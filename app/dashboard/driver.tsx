@@ -77,7 +77,7 @@ type Expense = {
 
 export default function DriverDashboard() {
   const { logout, user, refreshUser, authToken } = useAuth();
-  const [selectedPeriod, setSelectedPeriod] = useState('Daily');
+  const [selectedPeriod, setSelectedPeriod] = useState('Monthly');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [transactionFilter, setTransactionFilter] = useState('All');
   const [showTransactionFilterDropdown, setShowTransactionFilterDropdown] = useState(false);
@@ -93,6 +93,8 @@ export default function DriverDashboard() {
   const [todayExpenses, setTodayExpenses] = useState<Expense[]>([]);
   const [todayTransactionsLoading, setTodayTransactionsLoading] = useState(true);
   const [lastRefreshed, setLastRefreshed] = useState(Date.now());
+  const [monthlyEarnings, setMonthlyEarnings] = useState(0);
+  const [monthlySalary, setMonthlySalary] = useState(0);
 
   // Refresh user data when component loads
   useEffect(() => {
@@ -148,6 +150,18 @@ export default function DriverDashboard() {
         
         setTotalEarnings(earningSummary.totalEarnings || 0);
         setTotalExpenses(expenseSummary.totalExpenses || 0);
+
+        // Calculate monthly earnings and salary
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        const startDate = startOfMonth.toISOString().split('T')[0];
+        const endDate = endOfMonth.toISOString().split('T')[0];
+        const monthlyEarningsResp = await getAllEarnings({ driverId: user?.id, startDate, endDate });
+        let earningsArr = Array.isArray(monthlyEarningsResp) ? monthlyEarningsResp : (monthlyEarningsResp.earnings || []);
+        const totalMonth = earningsArr.reduce((sum: number, e: any) => sum + parseFloat(e.amount), 0);
+        setMonthlyEarnings(totalMonth);
+        setMonthlySalary(totalMonth * 0.3);
       } catch (error) {
         console.error('Error fetching data:', error);
       } finally {
@@ -334,13 +348,6 @@ export default function DriverDashboard() {
   const sidebarAnim = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
   const overlayAnim = useRef(new Animated.Value(0)).current;
   
-  // Trip data points
-  const data = [3, 5, 2, 4, 3, 6, 4];
-  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  
-  // Find max value for scaling
-  const maxValue = Math.max(...data);
-  
   // Animate sidebar when sidebarOpen changes
   useEffect(() => {
     if (sidebarOpen) {
@@ -400,7 +407,6 @@ export default function DriverDashboard() {
     { icon: 'list-outline', label: 'All Earnings', route: '/dashboard/all-earnings' },
     { icon: 'wallet-outline', label: 'Account Earnings', route: '/dashboard/account-earnings' },
     { icon: 'receipt-outline', label: 'Expenses', route: '/dashboard/all-expenses' },
-    { icon: 'add-circle-outline', label: 'Add Expense', route: '/dashboard/add-expense' },
   ];
 
   // Add function to navigate to routes
@@ -563,32 +569,25 @@ export default function DriverDashboard() {
           contentContainerStyle={styles.cardsContainer}
         >
           {/* Earnings Card */}
-          <View style={styles.cardContainer}>
+          <View style={[styles.cardContainer, { marginTop: 0 }]}>
             <LinearGradient
               colors={['#1a1a1a', '#000000']}
               style={styles.cardGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
-              <Image 
-                source={require('@/assets/logo/lightLogo.png')}
-                style={styles.cardLogo}
-                resizeMode="contain"
-              />
-              
-              <View style={styles.cardContent}>
+              <View style={[styles.cardContent, { justifyContent: 'flex-start', marginTop: 8 }]}>
                 <Text style={styles.amountLabel}>Total Earnings</Text>
                 {isLoading ? (
                   <Text style={styles.amount}>Loading...</Text>
                 ) : (
-                  <Text style={styles.amount}>AED {totalEarnings.toFixed(2)}</Text>
+                  <Text style={styles.amount}>AED {totalEarnings.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
                 )}
-              </View>
-
+            </View>
               <Text style={styles.driverName}>{userData?.name || user?.name || 'Loading...'}</Text>
             </LinearGradient>
           </View>
-
+          
           {/* Expenses Card */}
           <View style={styles.cardContainer}>
             <LinearGradient
@@ -597,89 +596,40 @@ export default function DriverDashboard() {
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
-              <Image 
-                source={require('@/assets/logo/lightLogo.png')}
-                style={styles.cardLogo}
-                resizeMode="contain"
-              />
-              
-              <View style={styles.cardContent}>
+              <View style={[styles.cardContent, { justifyContent: 'flex-start', marginTop: 8 }]}>
                 <Text style={styles.amountLabel}>Total Expenses</Text>
                 {isLoading ? (
                   <Text style={styles.amount}>Loading...</Text>
                 ) : (
-                  <Text style={styles.amount}>AED {totalExpenses.toFixed(2)}</Text>
+                  <Text style={styles.amount}>AED {totalExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
                 )}
               </View>
+              <Text style={styles.driverName}>{userData?.name || user?.name || 'Loading...'}</Text>
+            </LinearGradient>
+        </View>
 
+          {/* Monthly Salary Card */}
+          <View style={styles.cardContainer}>
+            <LinearGradient
+              colors={['#1a1a1a', '#000000']}
+              style={styles.cardGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <View style={[styles.cardContent, { justifyContent: 'flex-start', marginTop: 8 }]}>
+                <Text style={styles.amountLabel}>This Month Income</Text>
+                {isLoading ? (
+                  <Text style={styles.amount}>Loading...</Text>
+                ) : (
+                  <Text style={[styles.amount, { color: ((totalEarnings * 0.3) - totalExpenses) >= 0 ? '#ffffff' : '#ff4444' }]}>
+                    AED {((totalEarnings * 0.3) - totalExpenses).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </Text>
+                )}
+              </View>
               <Text style={styles.driverName}>{userData?.name || user?.name || 'Loading...'}</Text>
             </LinearGradient>
           </View>
         </ScrollView>
-
-        <View style={styles.statsRow}>
-          <View style={styles.statsCard}>
-            <Text style={styles.statsLabel}>Today's Earnings</Text>
-            <Text style={styles.statsValue}>$185.50</Text>
-            <Text style={styles.percentChange}>+8.2% from yesterday</Text>
-          </View>
-
-          <View style={styles.statsCard}>
-            <Text style={styles.statsLabel}>Trips Today</Text>
-            <Text style={styles.statsValue}>8</Text>
-            <Text style={styles.percentChange}>+2 from yesterday</Text>
-          </View>
-        </View>
-        
-        <View style={styles.graphSection}>
-          <Text style={styles.sectionTitle}>Trip Performance</Text>
-          
-          <View style={styles.periodToggle}>
-            <TouchableOpacity 
-              style={[styles.periodButton, selectedPeriod === 'Daily' && styles.activePeriodButton]}
-              onPress={() => setSelectedPeriod('Daily')}
-            >
-              <Text style={[styles.periodButtonText, selectedPeriod === 'Daily' && styles.activePeriodButtonText]}>Daily</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.periodButton, selectedPeriod === 'Weekly' && styles.activePeriodButton]}
-              onPress={() => setSelectedPeriod('Weekly')}
-            >
-              <Text style={[styles.periodButtonText, selectedPeriod === 'Weekly' && styles.activePeriodButtonText]}>Weekly</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.periodButton, selectedPeriod === 'Monthly' && styles.activePeriodButton]}
-              onPress={() => setSelectedPeriod('Monthly')}
-            >
-              <Text style={[styles.periodButtonText, selectedPeriod === 'Monthly' && styles.activePeriodButtonText]}>Monthly</Text>
-            </TouchableOpacity>
-          </View>
-          
-          {/* Custom chart implementation */}
-          <View style={styles.chartContainer}>
-            <View style={styles.chart}>
-              {data.map((value, index) => {
-                const height = (value / maxValue) * 180;
-                return (
-                  <View key={index} style={styles.barContainer}>
-                    <View style={[styles.bar, { height }]} />
-                    <Text style={styles.barLabel}>{days[index]}</Text>
-                  </View>
-                );
-              })}
-            </View>
-            <View style={styles.yAxis}>
-              <Text style={styles.yAxisLabel}>10</Text>
-              <Text style={styles.yAxisLabel}>8</Text>
-              <Text style={styles.yAxisLabel}>6</Text>
-              <Text style={styles.yAxisLabel}>4</Text>
-              <Text style={styles.yAxisLabel}>2</Text>
-              <Text style={styles.yAxisLabel}>0</Text>
-            </View>
-          </View>
-        </View>
 
         {/* Vehicle information */}
         <View style={styles.vehicleSection}>
@@ -693,30 +643,30 @@ export default function DriverDashboard() {
           ) : vehicles && vehicles.length > 0 ? (
             vehicles.map((vehicle) => (
               <View key={vehicle.id} style={styles.vehicleCard}>
-                <View style={styles.vehicleImageContainer}>
-                  <Image 
+            <View style={styles.vehicleImageContainer}>
+              <Image 
                     source={{ uri: vehicle.image || 'https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?ixlib=rb-1.2.1&auto=format&fit=crop&w=1470&q=80' }} 
-                    style={styles.vehicleImage} 
-                    resizeMode="cover"
-                  />
-                </View>
-                
-                <View style={styles.vehicleDetails}>
+                style={styles.vehicleImage} 
+                resizeMode="cover"
+              />
+            </View>
+            
+            <View style={styles.vehicleDetails}>
                   <Text style={styles.vehicleName}>{vehicle.name}</Text>
                   <Text style={styles.vehiclePlate}>License: {vehicle.plate}</Text>
-                  
-                  <View style={styles.vehicleStats}>
-                    <View style={styles.vehicleStat}>
+              
+              <View style={styles.vehicleStats}>
+                <View style={styles.vehicleStat}>
                       <Ionicons name="car-outline" size={18} color="#000" />
                       <Text style={styles.vehicleStatText}>{vehicle.type || 'N/A'}</Text>
-                    </View>
-                    
-                    <View style={styles.vehicleStat}>
+                </View>
+                
+                <View style={styles.vehicleStat}>
                       <Ionicons name="color-palette-outline" size={18} color="#000" />
                       <Text style={styles.vehicleStatText}>{vehicle.color || 'N/A'}</Text>
-                    </View>
-                    
-                    <View style={styles.vehicleStat}>
+                </View>
+                
+                <View style={styles.vehicleStat}>
                       <Ionicons name={
                         vehicle.status === 'active' ? "checkmark-circle-outline" :
                         vehicle.status === 'maintenance' ? "construct-outline" : "alert-circle-outline"
@@ -731,29 +681,31 @@ export default function DriverDashboard() {
                         {vehicle.status === 'active' ? 'Active' :
                          vehicle.status === 'maintenance' ? 'Maintenance' : 'Inactive'}
                       </Text>
-                    </View>
+                </View>
+              </View>
+                  
+                  <View style={styles.vehicleInfoRow}>
+                    {vehicle.location && (
+                      <View style={styles.vehicleInfoItem}>
+                        <Ionicons name="location-outline" size={18} color="#000" />
+                        <Text style={styles.vehicleInfoText}>{vehicle.location}</Text>
+                      </View>
+                    )}
+                    
+                    {vehicle.model && (
+                      <View style={styles.vehicleInfoItem}>
+                        <Ionicons name="calendar-outline" size={18} color="#000" />
+                        <Text style={styles.vehicleInfoText}>{vehicle.model}</Text>
+                      </View>
+                    )}
+                    
+                    {vehicle.ownership && (
+                      <View style={styles.vehicleInfoItem}>
+                        <Ionicons name="business-outline" size={18} color="#000" />
+                        <Text style={styles.vehicleInfoText}>{vehicle.ownership}</Text>
+                      </View>
+                    )}
                   </View>
-                  
-                  {vehicle.location && (
-                    <View style={styles.vehicleDetailRow}>
-                      <Ionicons name="location-outline" size={18} color="#000" />
-                      <Text style={styles.vehicleDetailText}>Location: {vehicle.location}</Text>
-                    </View>
-                  )}
-                  
-                  {vehicle.model && (
-                    <View style={styles.vehicleDetailRow}>
-                      <Ionicons name="calendar-outline" size={18} color="#000" />
-                      <Text style={styles.vehicleDetailText}>Model: {vehicle.model}</Text>
-                    </View>
-                  )}
-                  
-                  {vehicle.ownership && (
-                    <View style={styles.vehicleDetailRow}>
-                      <Ionicons name="business-outline" size={18} color="#000" />
-                      <Text style={styles.vehicleDetailText}>Ownership: {vehicle.ownership}</Text>
-                    </View>
-                  )}
                 </View>
               </View>
             ))
@@ -776,7 +728,7 @@ export default function DriverDashboard() {
               >
                 <Text style={styles.filterText}>{transactionFilter}</Text>
                 <Ionicons name="chevron-down" size={14} color="#000" />
-              </TouchableOpacity>
+            </TouchableOpacity>
               
               {/* Filter Dropdown */}
               {showTransactionFilterDropdown && (
@@ -816,14 +768,14 @@ export default function DriverDashboard() {
                   </TouchableOpacity>
                 </View>
               )}
+              </View>
             </View>
-          </View>
-          
+            
           {todayTransactionsLoading ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="small" color="#000" />
               <Text style={styles.loadingText}>Loading transactions...</Text>
-            </View>
+              </View>
           ) : (
             <View style={styles.transactionsContainer}>
               {/* Combined Transactions */}
@@ -838,7 +790,7 @@ export default function DriverDashboard() {
                             <View style={styles.transactionLeft}>
                               <View style={styles.transactionIconContainer}>
                                 <Ionicons name="card-outline" size={20} color="#333" />
-                              </View>
+                </View>
                               <View style={styles.transactionDetails}>
                                 <Text style={styles.transactionTitle}>
                                   {earning.type === 'Online' ? 'Online Payment' : 
@@ -848,12 +800,12 @@ export default function DriverDashboard() {
                                 <Text style={styles.transactionSubtitle}>
                                   {formatTransactionDate(earning.date)}
                                 </Text>
-                              </View>
-                            </View>
+                </View>
+              </View>
                             <Text style={styles.transactionAmount}>
                               AED {typeof earning.amount === 'string' ? parseFloat(earning.amount).toFixed(2) : Number(earning.amount).toFixed(2)}
                             </Text>
-                          </View>
+            </View>
                           {/* Add divider if not the last item */}
                           {(index < todayEarnings.length - 1 || 
                              (transactionFilter === 'All' && todayExpenses.length > 0)) && 
@@ -869,7 +821,7 @@ export default function DriverDashboard() {
                             <View style={styles.transactionLeft}>
                               <View style={[styles.transactionIconContainer, styles.expenseIconContainer]}>
                                 <Ionicons name="receipt-outline" size={20} color="#333" />
-                              </View>
+          </View>
                               <View style={styles.transactionDetails}>
                                 <Text style={styles.transactionTitle}>
                                   {expense.category || 'Expense'}
@@ -877,7 +829,7 @@ export default function DriverDashboard() {
                                 <Text style={styles.transactionSubtitle}>
                                   {formatTransactionDate(expense.date)}
                                 </Text>
-                              </View>
+        </View>
                             </View>
                             <Text style={[styles.transactionAmount, styles.expenseAmount]}>
                               -AED {typeof expense.amount === 'string' ? parseFloat(expense.amount).toFixed(2) : Number(expense.amount).toFixed(2)}
@@ -891,10 +843,10 @@ export default function DriverDashboard() {
                 ) : (
                   <Text style={styles.noTransactionsText}>No transactions today</Text>
                 )}
-              </View>
+      </View>
             </View>
           )}
-        </View>
+    </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -1102,89 +1054,10 @@ const styles = StyleSheet.create({
     color: 'green',
     marginTop: 5,
   },
-  graphSection: {
-    marginBottom: 20,
-    paddingHorizontal: 20,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#000',
-  },
-  viewAllButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  viewAllText: {
-    fontSize: 14,
-    color: '#3498db',
-    marginRight: 4,
-  },
-  periodToggle: {
-    flexDirection: 'row',
-    marginBottom: 15,
-  },
-  periodButton: {
-    paddingVertical: 5,
-    paddingHorizontal: 15,
-    marginRight: 10,
-  },
-  activePeriodButton: {
-    backgroundColor: '#000000',
-    borderRadius: 15,
-  },
-  periodButtonText: {
-    fontSize: 12,
-    color: '#666',
-  },
-  activePeriodButtonText: {
-    color: '#fff',
-  },
-  chartContainer: {
-    flexDirection: 'row',
-    height: 220,
-    marginVertical: 10,
-    paddingRight: 10,
-  },
-  yAxis: {
-    width: 35,
-    height: '100%',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    paddingVertical: 10,
-  },
-  yAxisLabel: {
-    fontSize: 10,
-    color: '#666',
-  },
-  chart: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    paddingLeft: 5,
-    height: '100%',
-  },
-  barContainer: {
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    width: (screenWidth - 35) / 7 - 5,
-  },
-  bar: {
-    width: 8,
-    backgroundColor: '#000000',
-    borderRadius: 5,
-  },
-  barLabel: {
-    fontSize: 10,
-    marginTop: 5,
-    color: '#666',
+    marginBottom: 12,
   },
   vehicleSection: {
     marginTop: 24,
@@ -1253,6 +1126,30 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     marginLeft: 5,
+  },
+  vehicleInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    marginTop: 8,
+    paddingTop: 8,
+  },
+  vehicleInfoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 10,
+    marginBottom: 4,
+  },
+  vehicleInfoText: {
+    fontSize: 13,
+    color: '#666',
+    marginLeft: 5,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
   },
   transactionsSection: {
     marginBottom: 20,
@@ -1398,22 +1295,8 @@ const styles = StyleSheet.create({
     borderColor: '#e0e0e0',
   },
   loadingText: {
-    marginTop: 12,
+    marginTop: 10,
     fontSize: 14,
-    color: '#666',
-  },
-  noVehiclesContainer: {
-    padding: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'transparent',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-  },
-  noVehiclesText: {
-    marginTop: 16,
-    fontSize: 16,
     color: '#666',
   },
   transactionFilterContainer: {
@@ -1454,5 +1337,19 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#e0e0e0',
     marginVertical: 8,
+  },
+  noVehiclesContainer: {
+    padding: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  noVehiclesText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
   },
 }); 

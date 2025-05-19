@@ -9,14 +9,17 @@ import {
   Dimensions,
   Animated,
   Easing,
-  ActivityIndicator
+  ActivityIndicator,
+  Alert
 } from 'react-native';
 import { router, useRouter, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/contexts/ToastContext';
 import { getEarningsSummary, getAllEarnings } from '@/services/earning.service';
+import { generateEarningsPDF } from '@/services/pdf.service';
 
 const screenWidth = Dimensions.get('window').width - 40;
 const SIDEBAR_WIDTH = 270;
@@ -53,6 +56,7 @@ type EarningsSummary = {
 
 export default function EarningsScreen() {
   const { logout, user } = useAuth();
+  const toast = useToast();
   const [selectedPeriod, setSelectedPeriod] = useState('weekly');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showAllEarnings, setShowAllEarnings] = useState(false);
@@ -64,6 +68,7 @@ export default function EarningsScreen() {
   const [earningsSummary, setEarningsSummary] = useState<EarningsSummary | null>(null);
   const [recentEarnings, setRecentEarnings] = useState<EarningType[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   // Role-based protection - only Driver can access this screen
   useEffect(() => {
@@ -220,9 +225,9 @@ export default function EarningsScreen() {
     setSidebarOpen(false);
   };
 
-  // Format currency
-  const formatCurrency = (amount: number | string) => {
-    return `$${parseFloat(amount.toString()).toFixed(2)}`;
+  // Format amount to display with currency
+  const formatAmount = (amount: number) => {
+    return `AED ${parseFloat(amount.toString()).toFixed(2)}`;
   };
   
   // Format date 
@@ -249,6 +254,44 @@ export default function EarningsScreen() {
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  // Handle PDF download
+  const handleDownloadStatement = async () => {
+    try {
+      setIsDownloading(true);
+      
+      if (!user) {
+        toast.showToast('error', 'Error', 'User data is not available');
+        return;
+      }
+      
+      // Fetch all earnings if we need more than what's already loaded
+      const fetchAllData = async () => {
+        try {
+          const filters = { driverId: user.id };
+          const allEarnings = await getAllEarnings(filters);
+          return allEarnings;
+        } catch (error) {
+          console.error('Error fetching all earnings:', error);
+          throw error;
+        }
+      };
+      
+      // Use recentEarnings if they exist, otherwise fetch all
+      const earningsData = recentEarnings.length > 0 ? 
+        recentEarnings : 
+        await fetchAllData();
+      
+      await generateEarningsPDF(earningsData, user, 'fleetx-earnings-statement.pdf');
+      
+      toast.showToast('success', 'Success', 'Earnings statement has been generated and is ready to share.');
+    } catch (error) {
+      console.error('Error downloading statement:', error);
+      toast.showToast('error', 'Error', 'Failed to generate earnings statement. Please try again.');
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   return (
@@ -344,27 +387,19 @@ export default function EarningsScreen() {
       </Animated.View>
       
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity 
-            style={styles.menuButton}
-            onPress={toggleSidebar}
-          >
-            <Ionicons name="menu-outline" size={24} color="black" />
-          </TouchableOpacity>
-          <Text style={styles.title}>Earnings</Text>
-        </View>
-        <View style={styles.headerRight}>
-          <TouchableOpacity 
-            style={styles.addButton}
-            onPress={() => router.push('/dashboard/add-earning' as any)}
-          >
-            <Ionicons name="add-circle-outline" size={24} color="black" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.notificationIcon}>
-            <Ionicons name="notifications" size={24} color="black" />
-            <View style={styles.notificationBadge} />
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => router.push('/dashboard/driver' as any)}
+        >
+          <Ionicons name="arrow-back" size={24} color="black" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Earnings</Text>
+        <TouchableOpacity 
+          style={styles.addButton}
+          onPress={() => router.push('/dashboard/add-earning' as any)}
+        >
+          <Ionicons name="add-circle-outline" size={24} color="black" />
+        </TouchableOpacity>
       </View>
       
       {isLoading ? (
@@ -415,7 +450,7 @@ export default function EarningsScreen() {
                       {item.count} {item.count === 1 ? 'Trip' : 'Trips'}
                     </Text>
                     <Text style={styles.paymentMethodAmount}>
-                      {formatCurrency(item.totalAmount)}
+                      {formatAmount(item.totalAmount)}
                     </Text>
                   </View>
                 ))
@@ -433,8 +468,8 @@ export default function EarningsScreen() {
                       />
                       <Text style={styles.paymentMethodTypeText}>{type}</Text>
                     </View>
-                    <Text style={styles.paymentMethodCount}>0 Trips</Text>
-                    <Text style={styles.paymentMethodAmount}>$0.00</Text>
+                    <Text style={styles.paymentMethodCount}>No transactions yet</Text>
+                    <Text style={styles.paymentMethodAmount}>AED 0.00</Text>
                   </View>
                 ))
               )}
@@ -465,7 +500,7 @@ export default function EarningsScreen() {
                       </Text>
                       <Text style={styles.paymentDate}>{formatDate(earning.date)}</Text>
                     </View>
-                    <Text style={styles.paymentAmount}>{formatCurrency(earning.amount)}</Text>
+                    <Text style={styles.paymentAmount}>{formatAmount(earning.amount)}</Text>
                   </View>
                 ))}
                 
@@ -496,9 +531,25 @@ export default function EarningsScreen() {
           <View style={styles.downloadSection}>
             <Text style={styles.sectionTitle}>Statements</Text>
             
-            <TouchableOpacity style={styles.downloadButton}>
-              <Ionicons name="download-outline" size={20} color="#fff" />
-              <Text style={styles.downloadButtonText}>Download Monthly Statement</Text>
+            <TouchableOpacity 
+              style={[
+                styles.downloadButton,
+                isDownloading && styles.disabledButton
+              ]}
+              onPress={handleDownloadStatement}
+              disabled={isDownloading}
+            >
+              {isDownloading ? (
+                <>
+                  <ActivityIndicator color="#fff" size="small" style={{marginRight: 8}} />
+                  <Text style={styles.downloadButtonText}>Please wait...</Text>
+                </>
+              ) : (
+                <>
+                  <Ionicons name="download-outline" size={20} color="#fff" />
+                  <Text style={styles.downloadButtonText}>Download Statement</Text>
+                </>
+              )}
             </TouchableOpacity>
             
             <TouchableOpacity 
@@ -557,27 +608,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
     paddingHorizontal: 20,
-    paddingTop: 10,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  backButton: {
+    padding: 5,
   },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  menuButton: {
-    marginRight: 15,
-  },
-  title: {
-    fontSize: 24,
+  headerTitle: {
+    fontSize: 20,
     fontWeight: 'bold',
+    textAlign: 'center',
   },
   addButton: {
-    marginRight: 15,
+    padding: 5,
   },
   notificationIcon: {
     position: 'relative',
@@ -861,5 +906,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginRight: 5,
     fontSize: 14,
+  },
+  disabledButton: {
+    backgroundColor: '#ccc',
   },
 }); 

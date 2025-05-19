@@ -5,7 +5,7 @@
 // - Your actual machine's IP for physical devices
 const getBaseUrl = () => {
   // For development, you can change this to your machine's IP address
-  const LOCAL_IP = '192.168.0.103'; // Change this to your computer's IP address
+  const LOCAL_IP = '10.0.91.123'; // Change this to your computer's IP address
   const PORT = '5000';
   
   // You can use different IPs based on platform if needed

@@ -29,7 +29,7 @@ type AuthContextType = {
   user: User | null;
   loading: boolean;
   isAuthenticated: boolean;
-  token: string | null;
+  token: string | null
   authToken: string | null;
   login: (email: string, password: string) => Promise<void>;
   signup: (data: SignupData) => Promise<void>;

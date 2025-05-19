@@ -16,12 +16,15 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/contexts/ToastContext';
 import { createEarning } from '@/services/earning.service';
 
 export default function AddEarningScreen() {
   const { token, user } = useAuth();
+  const toast = useToast();
   const [loading, setLoading] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [isAmountValid, setIsAmountValid] = useState(false);
   const [formData, setFormData] = useState({
     amount: '',
     type: 'Cash', // Default type
@@ -50,29 +53,86 @@ export default function AddEarningScreen() {
       router.replace('/dashboard/viewer');
     }
   }, [user]);
+  
+  // Validate amount whenever it changes
+  useEffect(() => {
+    const amount = formData.amount;
+    const amountValue = parseFloat(amount);
+    setIsAmountValid(
+      amount.length > 0 && 
+      !isNaN(amountValue) && 
+      amountValue > 0 && 
+      amount.replace(/\..*/g, '').length <= 5
+    );
+  }, [formData.amount]);
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    // For amount field, restrict to maximum 5 digits
+    if (field === 'amount' && value.length > 0) {
+      // Remove non-numeric characters except decimal point
+      const numericValue = value.replace(/[^\d.]/g, '');
+      
+      // Ensure we have at most one decimal point
+      const parts = numericValue.split('.');
+      let formattedValue = parts[0];
+      
+      // Limit to 5 digits before decimal point
+      if (formattedValue.length > 5) {
+        formattedValue = formattedValue.slice(0, 5);
+      }
+      
+      // Add decimal part if it exists
+      if (parts.length > 1) {
+        formattedValue += '.' + parts[1];
+      }
+      
+      // Check if amount is valid
+      const amountValue = parseFloat(formattedValue);
+      setIsAmountValid(
+        formattedValue.length > 0 && 
+        !isNaN(amountValue) && 
+        amountValue > 0 && 
+        formattedValue.replace(/\..*/g, '').length <= 5
+      );
+      
+      setFormData(prev => ({
+        ...prev,
+        [field]: formattedValue
+      }));
+    } else {
+      // If amount was changed to empty, update validity
+      if (field === 'amount') {
+        setIsAmountValid(false);
+      }
+      
+      setFormData(prev => ({
+        ...prev,
+        [field]: value
+      }));
+    }
   };
 
   const validateForm = () => {
     const { amount, type, driverId } = formData;
     
     if (!amount.trim() || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
-      Alert.alert('Error', 'Please enter a valid amount');
+      toast.showToast('error', 'Invalid Amount', 'Please enter a valid amount');
+      return false;
+    }
+    
+    // Check if amount exceeds 5 digits
+    if (amount.replace(/\..*/g, '').length > 5) {
+      toast.showToast('error', 'Invalid Amount', 'Amount cannot exceed 5 digits');
       return false;
     }
     
     if (!type) {
-      Alert.alert('Error', 'Payment type is required');
+      toast.showToast('error', 'Missing Payment Type', 'Payment type is required');
       return false;
     }
     
     if (!driverId) {
-      Alert.alert('Error', 'Driver is required');
+      toast.showToast('error', 'Missing Driver', 'Driver ID is required');
       return false;
     }
     
@@ -117,14 +177,15 @@ export default function AddEarningScreen() {
         (global as any).refreshDriverDashboard();
       }
       
-      Alert.alert(
-        'Success',
-        'Earning record created successfully',
-        [{ text: 'OK', onPress: () => router.push('/dashboard/driver' as any) }]
-      );
+      toast.showToast('success', 'Success', 'Earning record created successfully');
+      
+      // Navigate back after a short delay to let the toast appear
+      setTimeout(() => {
+        router.push('/dashboard/driver' as any);
+      }, 1000);
     } catch (error: any) {
       console.error('Error creating earning:', error);
-      Alert.alert('Error', error.message || 'Failed to create earning record');
+      toast.showToast('error', 'Error', error.message || 'Failed to create earning record');
     } finally {
       setLoading(false);
     }
@@ -270,7 +331,7 @@ export default function AddEarningScreen() {
       >
         {/* Amount Input */}
         <View style={styles.formGroup}>
-          <Text style={styles.label}>Amount ($)</Text>
+          <Text style={styles.label}>Amount (AED)</Text>
           <View style={styles.inputContainer}>
             <Ionicons name="cash-outline" size={20} color="#666" style={styles.inputIcon} />
             <TextInput
@@ -405,10 +466,10 @@ export default function AddEarningScreen() {
         <TouchableOpacity 
           style={[
             styles.submitButton,
-            loading && styles.disabledButton
+            (loading || !isAmountValid) && styles.disabledButton
           ]}
           onPress={handleSubmit}
-          disabled={loading}
+          disabled={loading || !isAmountValid}
         >
           {loading ? (
             <ActivityIndicator color="#fff" size="small" />
@@ -430,7 +491,7 @@ export default function AddEarningScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.datePickerContainer}>
             <View style={styles.datePickerHeader}>
-              <Text style={styles.datePickerTitle}>Select Date</Text>
+            <Text style={styles.datePickerTitle}>Select Date</Text>
               <TouchableOpacity 
                 onPress={() => setShowDatePicker(false)}
                 style={styles.closeButton}
@@ -467,7 +528,7 @@ export default function AddEarningScreen() {
                   ))}
                 </ScrollView>
               </View>
-
+              
               {/* Month Picker */}
               <View style={styles.pickerColumn}>
                 <Text style={styles.pickerLabel}>Month</Text>
@@ -495,7 +556,7 @@ export default function AddEarningScreen() {
                   ))}
                 </ScrollView>
               </View>
-
+              
               {/* Day Picker */}
               <View style={styles.pickerColumn}>
                 <Text style={styles.pickerLabel}>Day</Text>
@@ -524,13 +585,13 @@ export default function AddEarningScreen() {
                 </ScrollView>
               </View>
             </View>
-
-            <TouchableOpacity
+            
+              <TouchableOpacity 
               style={styles.confirmButton}
-              onPress={confirmDate}
-            >
+                onPress={confirmDate}
+              >
               <Text style={styles.confirmButtonText}>Confirm</Text>
-            </TouchableOpacity>
+              </TouchableOpacity>
           </View>
         </View>
       </Modal>

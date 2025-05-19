@@ -1,0 +1,201 @@
+import RNHTMLtoPDF from 'react-native-html-to-pdf';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+
+// Types
+type EarningType = {
+  id: string;
+  amount: number;
+  note?: string;
+  type: 'Online' | 'Cash' | 'Pocket Slipt';
+  driverId: string;
+  date: string;
+  createdAt: string;
+  updatedAt: string;
+  driver?: {
+    id: string;
+    name: string;
+    email: string;
+  };
+};
+
+/**
+ * Generate PDF statement for earnings
+ */
+export const generateEarningsPDF = async (
+  earnings: EarningType[],
+  userData: any,
+  fileName: string = 'earnings-statement.pdf'
+): Promise<void> => {
+  try {
+    // Calculate total earnings
+    const totalEarnings = earnings.reduce((total, earning) => {
+      return total + parseFloat(earning.amount.toString());
+    }, 0);
+
+    // Sort earnings by date (newest first)
+    const sortedEarnings = [...earnings].sort((a, b) => {
+      return new Date(b.date).getTime() - new Date(a.date).getTime();
+    });
+
+    // Format earnings data for HTML
+    const earningsRows = sortedEarnings.map((earning, index) => {
+      const date = new Date(earning.date);
+      const formattedDate = date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+
+      return `
+        <tr style="${index % 2 === 0 ? 'background-color: #f9f9f9;' : ''}">
+          <td style="padding: 8px 12px; border-bottom: 1px solid #eee;">${formattedDate}</td>
+          <td style="padding: 8px 12px; border-bottom: 1px solid #eee;">${earning.type}</td>
+          <td style="padding: 8px 12px; border-bottom: 1px solid #eee;">${earning.note || '-'}</td>
+          <td style="padding: 8px 12px; border-bottom: 1px solid #eee; text-align: right;">AED ${parseFloat(earning.amount.toString()).toFixed(2)}</td>
+        </tr>
+      `;
+    }).join('');
+
+    // Format currency
+    const totalFormatted = `AED ${totalEarnings.toFixed(2)}`;
+
+    // Current date for the report
+    const currentDate = new Date().toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+
+    // Create HTML content
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
+          <style>
+            body {
+              font-family: 'Helvetica', Arial, sans-serif;
+              margin: 0;
+              padding: 20px;
+              color: #333;
+            }
+            .header {
+              text-align: center;
+              margin-bottom: 30px;
+            }
+            .logo {
+              font-size: 24px;
+              font-weight: bold;
+              margin-bottom: 5px;
+            }
+            .title {
+              font-size: 20px;
+              margin: 20px 0;
+            }
+            .info-section {
+              margin-bottom: 20px;
+            }
+            .info-row {
+              display: flex;
+              margin-bottom: 10px;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 20px;
+            }
+            th {
+              background-color: #000;
+              color: white;
+              text-align: left;
+              padding: 10px 12px;
+            }
+            .total-row {
+              font-weight: bold;
+              background-color: #f0f0f0;
+            }
+            .footer {
+              margin-top: 40px;
+              text-align: center;
+              font-size: 12px;
+              color: #666;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="logo">FleetX</div>
+            <div>Earnings Statement</div>
+          </div>
+          
+          <div class="info-section">
+            <div><strong>Driver:</strong> ${userData?.name || 'Driver'}</div>
+            <div><strong>Driver ID:</strong> ${userData?.id || 'N/A'}</div>
+            <div><strong>Generated on:</strong> ${currentDate}</div>
+          </div>
+          
+          <h2 class="title">Earnings Summary</h2>
+          
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Payment Type</th>
+                <th>Description</th>
+                <th style="text-align: right;">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${earningsRows}
+              <tr class="total-row">
+                <td colspan="3" style="padding: 12px; border-top: 2px solid #000; text-align: right;"><strong>Total</strong></td>
+                <td style="padding: 12px; border-top: 2px solid #000; text-align: right;"><strong>${totalFormatted}</strong></td>
+              </tr>
+            </tbody>
+          </table>
+          
+          <div class="footer">
+            <p>This document was automatically generated by FleetX. © ${new Date().getFullYear()} FleetX.</p>
+          </div>
+        </body>
+      </html>
+    `;
+
+    // Instead of using RNHTMLtoPDF directly, use Expo's FileSystem to save HTML to a temporary file
+    // Then share that file instead
+    
+    // Create a temporary HTML file
+    const htmlFileUri = FileSystem.documentDirectory + 'earnings-statement.html';
+    await FileSystem.writeAsStringAsync(htmlFileUri, htmlContent, {
+      encoding: FileSystem.EncodingType.UTF8
+    });
+    
+    // Share the HTML file
+    await Sharing.shareAsync(htmlFileUri, {
+      mimeType: 'text/html',
+      dialogTitle: 'Download Earnings Statement'
+    });
+    
+    console.log('Statement generated and shared successfully');
+    
+    // We're not using RNHTMLtoPDF.convert for now since it's causing issues
+    // const options = {
+    //   html: htmlContent,
+    //   fileName: fileName,
+    //   directory: 'Documents',
+    //   base64: true
+    // };
+    // const file = await RNHTMLtoPDF.convert(options);
+    // if (file.filePath) {
+    //   await Sharing.shareAsync(file.filePath);
+    // }
+  } catch (error) {
+    console.error('Error generating statement:', error);
+    // Provide detailed error information
+    if (error instanceof Error) {
+      console.error('Error details:', error.message, error.stack);
+    }
+    throw new Error('Failed to generate earnings statement PDF');
+  }
+}; 

@@ -40,6 +40,8 @@ export default function LoginScreen() {
     }
 
     try {
+      // No need to manually handle loading state here as it's managed by the auth context
+      // The loading state in the auth context will automatically be set to true during login
       await login(email, password);
       // If we get here, the login was successful and navigation happens in the auth context
     } catch (err: any) {
@@ -128,7 +130,6 @@ export default function LoginScreen() {
             onPress={handleLogin}
             loading={loading}
             fullWidth
-            icon={true}
             outlined
           />
 

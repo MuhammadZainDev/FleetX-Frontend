@@ -43,7 +43,7 @@ export function Input({
 
   const backgroundColor = animatedValue.interpolate({
     inputRange: [0, 1],
-    outputRange: ['#F8F8F8', '#FFFFFF']
+    outputRange: ['#FFFFFF', '#FFFFFF']
   });
 
   const iconColor = isFocused ? '#666666' : '#BBBBBB';
