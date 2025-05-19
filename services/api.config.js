@@ -4,15 +4,15 @@
 // - localhost for iOS simulators
 // - Your actual machine's IP for physical devices
 const getBaseUrl = () => {
-  // For development, you can change this to your machine's IP address
-  const LOCAL_IP = '10.0.91.123'; // Change this to your computer's IP address
-  const PORT = '5000';
+  // Production Railway URL
+  const PRODUCTION_URL = 'https://fleetx-backend-production.up.railway.app/api';
   
-  // You can use different IPs based on platform if needed
-  // import { Platform } from 'react-native';
-  // const devHost = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
+  // For local development, uncomment and set your IP
+  // const LOCAL_IP = '10.0.91.123'; // Change this to your computer's IP address
+  // const PORT = '5000';
+  // return `http://${LOCAL_IP}:${PORT}/api`;
   
-  return `http://${LOCAL_IP}:${PORT}/api`;
+  return PRODUCTION_URL;
 };
 
 export const API_BASE_URL = getBaseUrl();
