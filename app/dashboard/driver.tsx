@@ -407,6 +407,7 @@ export default function DriverDashboard() {
     { icon: 'list-outline', label: 'All Earnings', route: '/dashboard/all-earnings' },
     { icon: 'wallet-outline', label: 'Account Earnings', route: '/dashboard/account-earnings' },
     { icon: 'receipt-outline', label: 'Expenses', route: '/dashboard/all-expenses' },
+    { icon: 'car-outline', label: 'Auto Expenses', route: '/dashboard/auto-expense' },
   ];
 
   // Add function to navigate to routes

@@ -8,23 +8,48 @@ import {
   Image, 
   Dimensions,
   Animated,
-  Easing 
+  Easing,
+  ActivityIndicator
 } from 'react-native';
 import { router, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
+import { LinearGradient } from 'expo-linear-gradient';
+import { getAllDrivers } from '@/services/driver.service';
+import { getEarningsSummary } from '@/services/earning.service';
 
 const screenWidth = Dimensions.get('window').width - 40;
 const screenHeight = Dimensions.get('window').height;
 const SIDEBAR_WIDTH = 270;
 
+// Define driver and earnings types
+type Driver = {
+  id: string;
+  name: string;
+  email: string;
+  phoneNumber: string;
+  role: string;
+  isActive: boolean;
+};
+
+type EarningsSummary = {
+  totalEarnings: number;
+  weeklyEarnings?: number;
+  monthlyEarnings?: number;
+};
+
 export default function AdminDashboard() {
-  const { logout, user } = useAuth();
+  const { logout, user, authToken } = useAuth();
   const [selectedPeriod, setSelectedPeriod] = useState('Daily');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const router = useRouter();
+  
+  // New state variables for active drivers and their earnings
+  const [activeDrivers, setActiveDrivers] = useState<Driver[]>([]);
+  const [driverEarnings, setDriverEarnings] = useState<{[key: string]: EarningsSummary}>({});
+  const [isLoading, setIsLoading] = useState(true);
 
   // Role-based protection - only Admin can access this dashboard
   useEffect(() => {
@@ -128,6 +153,64 @@ export default function AdminDashboard() {
     { icon: 'car-outline' as any, label: 'Vehicles', route: '/vehicles' },
   ];
 
+  // Fetch drivers
+  useEffect(() => {
+    const fetchDrivers = async () => {
+      try {
+        if (!authToken) return;
+        
+        setIsLoading(true);
+        console.log('Fetching drivers with token...');
+        
+        const response = await getAllDrivers(authToken);
+        console.log('Driver API response:', response);
+        
+        if (response && response.data) {
+          const allDrivers = response.data;
+          console.log('All users found:', allDrivers.length);
+          
+          // Set all drivers without filtering
+          setActiveDrivers(allDrivers);
+          
+          // Fetch earnings for each driver
+          if (allDrivers.length > 0) {
+            const earningsData: {[key: string]: EarningsSummary} = {};
+            
+            await Promise.all(
+              allDrivers.map(async (driver: Driver) => {
+                try {
+                  const summary = await getEarningsSummary(driver.id, 'monthly', null);
+                  earningsData[driver.id] = summary;
+                } catch (error) {
+                  console.error(`Error fetching earnings for driver ${driver.id}:`, error);
+                  earningsData[driver.id] = { totalEarnings: 0 };
+                }
+              })
+            );
+            
+            setDriverEarnings(earningsData);
+          }
+        } else {
+          console.log('No drivers found in response');
+          setActiveDrivers([]);
+        }
+      } catch (error) {
+        console.error('Error fetching drivers:', error);
+        setActiveDrivers([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchDrivers();
+  }, [authToken]);
+
+  // Use a constant black gradient for all cards
+  const getCardGradient = () => {
+    // Return the black gradient used in driver dashboard
+    return ['#1a1a1a', '#000000'] as const;
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
@@ -225,12 +308,67 @@ export default function AdminDashboard() {
       </View>
       
       <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Background Gradient */}
+        <LinearGradient
+          colors={['#f8f9fa', '#e9ecef']}
+          style={styles.backgroundGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        />
+
+        {/* Driver Cards Section */}
+        <View style={styles.driverCardsSection}>
+          {isLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#000" />
+              <Text style={styles.loadingText}>Loading driver data...</Text>
+            </View>
+          ) : activeDrivers.length === 0 ? (
+            <View style={styles.noDataContainer}>
+              <Text style={styles.noDataText}>No active drivers found</Text>
+            </View>
+          ) : (
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.cardsContainer}
+            >
+              {activeDrivers.map((driver) => (
+                <TouchableOpacity 
+                  key={driver.id} 
+                  style={styles.cardContainer}
+                  onPress={() => router.push({
+                    pathname: '/dashboard/driver-statistics',
+                    params: { id: driver.id, name: driver.name }
+                  })}
+                >
+                  <LinearGradient
+                    colors={getCardGradient()}
+                    style={styles.cardGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  >
+                    <View style={[styles.cardContent, { justifyContent: 'flex-start', marginTop: 8 }]}>
+                      <Text style={styles.amountLabel}>Total Earnings</Text>
+                      <Text style={styles.amount}>
+                        AED {(driverEarnings[driver.id]?.totalEarnings || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </Text>
+                    </View>
+                    <Text style={styles.driverName}>{driver.name}</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
+        </View>
+
+        {/* Stats Row */}
         <View style={styles.statsRow}>
           <View style={styles.earningsCard}>
             <Text style={styles.earningsLabel}>Total Earnings</Text>
             <Text style={styles.earningsValue}>$24,856</Text>
             <Text style={styles.percentChange}>+12.5%</Text>
-        </View>
+          </View>
 
           <View style={styles.driversCard}>
             <Text style={styles.driversLabel}>Active Drivers</Text>
@@ -308,7 +446,7 @@ export default function AdminDashboard() {
                 style={styles.driverAvatar} 
               />
               <View style={styles.driverInfo}>
-                <Text style={styles.driverName}>John Smith</Text>
+                <Text style={styles.listDriverName}>John Smith</Text>
                 <View style={styles.driverMeta}>
                   <View style={styles.statusBadge}>
                     <Text style={styles.statusText}>active</Text>
@@ -335,7 +473,7 @@ export default function AdminDashboard() {
                 style={styles.driverAvatar} 
               />
               <View style={styles.driverInfo}>
-                <Text style={styles.driverName}>Sarah Johnson</Text>
+                <Text style={styles.listDriverName}>Sarah Johnson</Text>
                 <View style={styles.driverMeta}>
                   <View style={styles.statusBadge}>
                     <Text style={styles.statusText}>active</Text>
@@ -362,7 +500,7 @@ export default function AdminDashboard() {
                 style={styles.driverAvatar}
               />
               <View style={styles.driverInfo}>
-                <Text style={styles.driverName}>Michael Brown</Text>
+                <Text style={styles.listDriverName}>Michael Brown</Text>
                 <View style={styles.driverMeta}>
                   <View style={[styles.statusBadge, styles.inactiveStatus]}>
                     <Text style={styles.statusText}>inactive</Text>
@@ -715,10 +853,15 @@ const styles = StyleSheet.create({
   driverInfo: {
     flex: 1,
   },
+  listDriverName: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
   driverName: {
     fontSize: 14,
-    fontWeight: '500',
-    marginBottom: 4,
+    color: '#ffffff',
+    fontWeight: 'bold',
+    textAlign: 'right',
   },
   driverMeta: {
     flexDirection: 'row',
@@ -795,5 +938,77 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     color: '#000',
+  },
+  backgroundGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  cardsContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+  },
+  cardContainer: {
+    width: Dimensions.get('window').width - 80,
+    height: 200,
+    borderRadius: 20,
+    overflow: 'hidden',
+    marginRight: 16,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  cardGradient: {
+    flex: 1,
+    padding: 24,
+  },
+  cardContent: {
+    flex: 1,
+  },
+  amountLabel: {
+    color: '#ffffff80',
+    fontSize: 16,
+    marginBottom: 8,
+    fontWeight: '500',
+  },
+  amount: {
+    color: '#ffffff',
+    fontSize: 36,
+    fontWeight: 'bold',
+  },
+  adminLabel: {
+    fontSize: 12,
+    color: '#ffffff',
+    opacity: 0.7,
+    marginTop: 5,
+  },
+  driverCardsSection: {
+    marginBottom: 20,
+    paddingHorizontal: 0,
+  },
+  loadingContainer: {
+    height: 160,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 14,
+    color: '#666',
+  },
+  noDataContainer: {
+    height: 160,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    borderRadius: 15,
+  },
+  noDataText: {
+    fontSize: 16,
+    color: '#666',
   },
 }); 
