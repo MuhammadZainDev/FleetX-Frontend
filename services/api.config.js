@@ -47,6 +47,14 @@ export const ENDPOINTS = {
     UPDATE: '/expenses/:id',
     DELETE: '/expenses/:id',
   },
+  AUTO_EXPENSE: {
+    GET_ALL: '/auto-expenses',
+    GET_ONE: '/auto-expenses/:id',
+    GET_SUMMARY: '/auto-expenses/driver/:driverId/summary',
+    CREATE: '/auto-expenses',
+    UPDATE: '/auto-expenses/:id',
+    DELETE: '/auto-expenses/:id',
+  },
   VEHICLE: {
     GET_ALL: '/vehicles',
     GET_ONE: '/vehicles/:id',

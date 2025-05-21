@@ -25,6 +25,7 @@ export default function DashboardLayout() {
       <Stack.Screen name="add-driver" />
       <Stack.Screen name="edit-driver" />
       <Stack.Screen name="auto-expense" />
+      <Stack.Screen name="add-auto-expense" />
     </Stack>
   );
 } 
