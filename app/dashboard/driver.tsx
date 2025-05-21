@@ -25,6 +25,7 @@ import { getExpensesSummary, getAllExpenses } from '@/services/expense.service';
 import { getProfile } from '@/services/auth.service';
 import { getDriverVehicles } from '@/services/vehicle.service';
 import { getAllEarnings } from '@/services/earning.service';
+import { getAutoExpensesSummary } from '@/services/autoExpense.service';
 
 const screenWidth = Dimensions.get('window').width - 40;
 const screenHeight = Dimensions.get('window').height;
@@ -85,6 +86,7 @@ export default function DriverDashboard() {
   const pathname = usePathname();
   const [totalEarnings, setTotalEarnings] = useState(0);
   const [totalExpenses, setTotalExpenses] = useState(0);
+  const [totalAutoExpenses, setTotalAutoExpenses] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [userData, setUserData] = useState(user);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -143,13 +145,15 @@ export default function DriverDashboard() {
     const fetchDriverData = async () => {
       try {
         setIsLoading(true);
-        const [earningSummary, expenseSummary] = await Promise.all([
+        const [earningSummary, expenseSummary, autoExpenseSummary] = await Promise.all([
           getEarningsSummary(user?.id, selectedPeriod),
-          getExpensesSummary(user?.id, selectedPeriod)
+          getExpensesSummary(user?.id, selectedPeriod),
+          getAutoExpensesSummary(user?.id, selectedPeriod)
         ]);
         
         setTotalEarnings(earningSummary.totalEarnings || 0);
         setTotalExpenses(expenseSummary.totalExpenses || 0);
+        setTotalAutoExpenses(autoExpenseSummary.totalAutoExpenses || 0);
 
         // Calculate monthly earnings and salary
         const now = new Date();
@@ -472,7 +476,7 @@ export default function DriverDashboard() {
           { transform: [{ translateX: sidebarAnim }] }
         ]}
       >
-        <View style={{height: screenHeight, display: 'flex', flexDirection: 'column', justifyContent: 'space-between'}}>
+        <SafeAreaView style={{flex: 1, height: '100%'}}>
           <View style={styles.sidebarHeader}>
             <View style={styles.sidebarUserInfo}>
               <View style={styles.sidebarAvatar}>
@@ -527,7 +531,7 @@ export default function DriverDashboard() {
               <Text style={styles.logoutButtonText}>Logout</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </SafeAreaView>
       </Animated.View>
       
       <View style={styles.header}>
@@ -578,7 +582,14 @@ export default function DriverDashboard() {
               end={{ x: 1, y: 1 }}
             >
               <View style={[styles.cardContent, { justifyContent: 'flex-start', marginTop: 8 }]}>
-                <Text style={styles.amountLabel}>Total Earnings</Text>
+                <View style={styles.cardHeaderRow}>
+                  <Text style={styles.amountLabel}>Total Earnings</Text>
+                  <Ionicons 
+                    name="cash-outline" 
+                    size={20} 
+                    color="#4CAF50" 
+                  />
+                </View>
                 {isLoading ? (
                   <Text style={styles.amount}>Loading...</Text>
                 ) : (
@@ -598,7 +609,14 @@ export default function DriverDashboard() {
               end={{ x: 1, y: 1 }}
             >
               <View style={[styles.cardContent, { justifyContent: 'flex-start', marginTop: 8 }]}>
-                <Text style={styles.amountLabel}>Total Expenses</Text>
+                <View style={styles.cardHeaderRow}>
+                  <Text style={styles.amountLabel}>Total Expenses</Text>
+                  <Ionicons 
+                    name="wallet-outline" 
+                    size={20} 
+                    color="#ff4444" 
+                  />
+                </View>
                 {isLoading ? (
                   <Text style={styles.amount}>Loading...</Text>
                 ) : (
@@ -607,7 +625,34 @@ export default function DriverDashboard() {
               </View>
               <Text style={styles.driverName}>{userData?.name || user?.name || 'Loading...'}</Text>
             </LinearGradient>
-        </View>
+          </View>
+
+          {/* Auto Expense Card */}
+          <View style={styles.cardContainer}>
+            <LinearGradient
+              colors={['#1a1a1a', '#000000']}
+              style={styles.cardGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <View style={[styles.cardContent, { justifyContent: 'flex-start', marginTop: 8 }]}>
+                <View style={styles.cardHeaderRow}>
+                  <Text style={styles.amountLabel}>Auto Expense</Text>
+                  <Ionicons 
+                    name="car-outline" 
+                    size={20} 
+                    color="#FF9800" 
+                  />
+                </View>
+                {isLoading ? (
+                  <Text style={styles.amount}>Loading...</Text>
+                ) : (
+                  <Text style={styles.amount}>AED {totalAutoExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
+                )}
+              </View>
+              <Text style={styles.driverName}>{userData?.name || user?.name || 'Loading...'}</Text>
+            </LinearGradient>
+          </View>
 
           {/* Monthly Salary Card */}
           <View style={styles.cardContainer}>
@@ -618,7 +663,14 @@ export default function DriverDashboard() {
               end={{ x: 1, y: 1 }}
             >
               <View style={[styles.cardContent, { justifyContent: 'flex-start', marginTop: 8 }]}>
-                <Text style={styles.amountLabel}>This Month Income</Text>
+                <View style={styles.cardHeaderRow}>
+                  <Text style={styles.amountLabel}>This Month Income</Text>
+                  <Ionicons 
+                    name={((totalEarnings * 0.3) - totalExpenses) >= 0 ? "trending-up" : "trending-down"} 
+                    size={20} 
+                    color={((totalEarnings * 0.3) - totalExpenses) >= 0 ? "#4CAF50" : "#ff4444"} 
+                  />
+                </View>
                 {isLoading ? (
                   <Text style={styles.amount}>Loading...</Text>
                 ) : (
@@ -891,7 +943,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     width: SIDEBAR_WIDTH,
-    height: screenHeight,
+    height: '100%',
     backgroundColor: '#fff',
     zIndex: 2,
     borderTopRightRadius: 20,
@@ -1352,5 +1404,28 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
     color: '#666',
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  incomeProgressContainer: {
+    marginTop: 12,
+  },
+  incomeProgressBar: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    marginBottom: 6,
+  },
+  incomeProgressFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  incomePercentage: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.7)',
   },
 }); 

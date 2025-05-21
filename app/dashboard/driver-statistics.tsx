@@ -17,6 +17,7 @@ import { getDriverById } from '@/services/driver.service';
 import { getEarningsSummary } from '@/services/earning.service';
 import { getExpensesSummary } from '@/services/expense.service';
 import { getDriverVehicles } from '@/services/vehicle.service';
+import { getAutoExpensesSummary } from '@/services/autoExpense.service';
 
 const { width } = Dimensions.get('window');
 
@@ -50,6 +51,7 @@ export default function DriverStatistics() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [totalEarnings, setTotalEarnings] = useState(0);
   const [totalExpenses, setTotalExpenses] = useState(0);
+  const [totalAutoExpenses, setTotalAutoExpenses] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -154,8 +156,8 @@ export default function DriverStatistics() {
           setVehicles([]);
         }
         
-        // Fetch earnings and expenses summaries
-        console.log('Fetching earnings and expenses for driver ID:', driverId);
+        // Fetch earnings, expenses, and auto expenses summaries
+        console.log('Fetching earnings, expenses, and auto expenses for driver ID:', driverId);
         
         try {
           const earningsSummary = await getEarningsSummary(driverId, 'monthly');
@@ -203,6 +205,30 @@ export default function DriverStatistics() {
           setTotalExpenses(0);
         }
         
+        // New: Fetch auto expenses summary
+        try {
+          const autoExpensesSummary = await getAutoExpensesSummary(driverId, 'monthly');
+          console.log('Auto expenses summary:', autoExpensesSummary);
+          
+          // Check different possible response structures and extract total auto expenses
+          if (autoExpensesSummary) {
+            let autoExpenses = 0;
+            if (typeof autoExpensesSummary.totalAutoExpenses === 'number') {
+              autoExpenses = autoExpensesSummary.totalAutoExpenses;
+            } else if (autoExpensesSummary.data && typeof autoExpensesSummary.data.totalAutoExpenses === 'number') {
+              autoExpenses = autoExpensesSummary.data.totalAutoExpenses;
+            }
+            console.log('Setting total auto expenses to:', autoExpenses);
+            setTotalAutoExpenses(autoExpenses);
+          } else {
+            console.warn('Auto expenses summary is null or undefined');
+            setTotalAutoExpenses(0);
+          }
+        } catch (autoExpErr) {
+          console.error('Error fetching auto expenses:', autoExpErr);
+          setTotalAutoExpenses(0);
+        }
+        
       } catch (err) {
         console.error('Error fetching driver data:', err);
         setError('Failed to load driver information');
@@ -218,8 +244,8 @@ export default function DriverStatistics() {
     router.back();
   };
 
-  // Calculate net income (earnings - expenses)
-  const netIncome = totalEarnings - totalExpenses;
+  // Calculate net income (earnings - expenses - auto expenses)
+  const netIncome = totalEarnings - totalExpenses - totalAutoExpenses;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -293,6 +319,11 @@ export default function DriverStatistics() {
               <View style={styles.financialRow}>
                 <Text style={styles.financialLabel}>Total Expenses:</Text>
                 <Text style={styles.financialValue}>AED {totalExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
+              </View>
+              
+              <View style={styles.financialRow}>
+                <Text style={styles.financialLabel}>Auto Expenses:</Text>
+                <Text style={styles.financialValue}>AED {totalAutoExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
               </View>
               
               <View style={styles.divider} />

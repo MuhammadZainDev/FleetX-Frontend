@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { getAllEarnings } from '@/services/earning.service';
 import { getAllExpenses } from '@/services/expense.service';
+import { getAllAutoExpenses } from '@/services/autoExpense.service';
 
 // Define data types
 type EarningType = {
@@ -41,12 +42,23 @@ type ExpenseType = {
   updatedAt: string;
 };
 
+type AutoExpenseType = {
+  id: string;
+  amount: number;
+  note?: string;
+  category?: string;
+  driverId: string;
+  date: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 type TransactionType = {
   id: string;
   amount: number;
   description?: string;
   date: string;
-  type: string; // 'earning' or 'expense'
+  type: string; // 'earning', 'expense', or 'autoExpense'
   category?: string;
   transactionType?: string;
 };
@@ -61,10 +73,11 @@ export default function DriverDetailScreen() {
   const [transactions, setTransactions] = useState<TransactionType[]>([]);
   const [earnings, setEarnings] = useState<EarningType[]>([]);
   const [expenses, setExpenses] = useState<ExpenseType[]>([]);
+  const [autoExpenses, setAutoExpenses] = useState<AutoExpenseType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'all' | 'earnings' | 'expenses'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'earnings' | 'expenses' | 'autoExpenses'>('all');
   
   // Fetch data
   const fetchData = async () => {
@@ -96,6 +109,14 @@ export default function DriverDetailScreen() {
       setExpenses(expensesArray);
       console.log(`Fetched ${expensesArray.length} expenses`);
       
+      // Fetch auto expenses
+      const autoExpensesData = await getAllAutoExpenses({ driverId });
+      const autoExpensesArray = Array.isArray(autoExpensesData) 
+        ? autoExpensesData 
+        : autoExpensesData?.data || autoExpensesData?.autoExpenses || [];
+      setAutoExpenses(autoExpensesArray);
+      console.log(`Fetched ${autoExpensesArray.length} auto expenses`);
+      
       // Combine and sort transactions
       const allTransactions = [
         ...earningsArray.map(e => ({
@@ -112,6 +133,14 @@ export default function DriverDetailScreen() {
           description: e.description || 'Expense',
           date: e.date,
           type: 'expense',
+          category: e.category
+        })),
+        ...autoExpensesArray.map(e => ({
+          id: e.id,
+          amount: e.amount,
+          description: e.note || 'Auto Expense',
+          date: e.date,
+          type: 'autoExpense',
           category: e.category
         }))
       ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -175,12 +204,19 @@ export default function DriverDetailScreen() {
     <View style={styles.transactionItem}>
       <View style={[
         styles.transactionIconContainer,
-        item.type === 'expense' && styles.expenseIconContainer
+        item.type === 'expense' && styles.expenseIconContainer,
+        item.type === 'autoExpense' && styles.autoExpenseIconContainer
       ]}>
         <Ionicons 
-          name={item.type === 'earning' ? 'cash-outline' : 'receipt-outline'} 
+          name={
+            item.type === 'earning' ? 'cash-outline' : 
+            item.type === 'expense' ? 'receipt-outline' : 'car-outline'
+          } 
           size={24} 
-          color={item.type === 'earning' ? '#4CAF50' : '#FF5252'} 
+          color={
+            item.type === 'earning' ? '#4CAF50' : 
+            item.type === 'expense' ? '#FF5252' : '#FF9800'
+          } 
         />
       </View>
       <View style={styles.transactionInfo}>
@@ -193,9 +229,10 @@ export default function DriverDetailScreen() {
       </View>
       <Text style={[
         styles.transactionAmount,
-        item.type === 'expense' && styles.expenseAmount
+        item.type === 'expense' && styles.expenseAmount,
+        item.type === 'autoExpense' && styles.autoExpenseAmount
       ]}>
-        {item.type === 'expense' ? '-' : '+'}{formatCurrency(item.amount)}
+        {item.type !== 'earning' ? '-' : '+'}{formatCurrency(item.amount)}
       </Text>
     </View>
   );
@@ -204,11 +241,12 @@ export default function DriverDetailScreen() {
   const getFilteredTransactions = () => {
     if (activeTab === 'all') return transactions;
     if (activeTab === 'earnings') return transactions.filter(t => t.type === 'earning');
-    return transactions.filter(t => t.type === 'expense');
+    if (activeTab === 'expenses') return transactions.filter(t => t.type === 'expense');
+    return transactions.filter(t => t.type === 'autoExpense');
   };
 
   // Filter options for rendering
-  const filterOptions = ['all', 'earnings', 'expenses'];
+  const filterOptions = ['all', 'earnings', 'expenses', 'autoExpenses'];
 
   return (
     <SafeAreaView style={styles.container}>
@@ -249,7 +287,7 @@ export default function DriverDetailScreen() {
                   activeTab === option && styles.selectedFilterText
                 ]}
               >
-                {option.charAt(0).toUpperCase() + option.slice(1)}
+                {option === 'autoExpenses' ? 'Auto Expenses' : option.charAt(0).toUpperCase() + option.slice(1)}
               </Text>
             </TouchableOpacity>
           ))}
@@ -289,13 +327,16 @@ export default function DriverDetailScreen() {
           ListEmptyComponent={() => (
             <View style={styles.emptyStateContainer}>
               <Ionicons 
-                name={activeTab === 'earnings' ? 'cash-outline' : 
-                      activeTab === 'expenses' ? 'receipt-outline' : 'wallet-outline'} 
+                name={
+                  activeTab === 'earnings' ? 'cash-outline' : 
+                  activeTab === 'expenses' ? 'receipt-outline' : 
+                  activeTab === 'autoExpenses' ? 'car-outline' : 'wallet-outline'
+                } 
                 size={48} 
                 color="#ccc" 
               />
               <Text style={styles.emptyStateText}>
-                No {activeTab === 'all' ? 'transactions' : activeTab} found for this driver
+                No {activeTab === 'all' ? 'transactions' : activeTab === 'autoExpenses' ? 'auto expenses' : activeTab} found for this driver
               </Text>
             </View>
           )}
@@ -421,6 +462,9 @@ const styles = StyleSheet.create({
   expenseIconContainer: {
     backgroundColor: '#FFEBEE',
   },
+  autoExpenseIconContainer: {
+    backgroundColor: '#FFF3E0',
+  },
   transactionInfo: {
     flex: 1,
   },
@@ -451,6 +495,9 @@ const styles = StyleSheet.create({
   },
   expenseAmount: {
     color: '#FF5252',
+  },
+  autoExpenseAmount: {
+    color: '#FF9800',
   },
   emptyStateContainer: {
     alignItems: 'center',

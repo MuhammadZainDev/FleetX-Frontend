@@ -140,6 +140,9 @@ export default function AdminDashboard() {
       case '/dashboard/admin':
         router.replace('/dashboard/admin');
         break;
+      case '/dashboard/users':
+        router.replace('/dashboard/users');
+        break;
       default:
         // For other routes, just log for now
         console.log(`Navigate to: ${route}`);
@@ -151,6 +154,7 @@ export default function AdminDashboard() {
   const menuItems = [
     { icon: 'home-outline' as any, label: 'Dashboard', route: '/dashboard/admin' },
     { icon: 'car-outline' as any, label: 'Vehicles', route: '/vehicles' },
+    { icon: 'people-outline' as any, label: 'Users', route: '/dashboard/users' },
   ];
 
   // Fetch drivers
@@ -310,7 +314,7 @@ export default function AdminDashboard() {
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Background Gradient */}
         <LinearGradient
-          colors={['#f8f9fa', '#e9ecef']}
+          colors={['#FFFFFF', '#FFFFFF']}
           style={styles.backgroundGradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -353,7 +357,7 @@ export default function AdminDashboard() {
                       <Text style={styles.amount}>
                         AED {(driverEarnings[driver.id]?.totalEarnings || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </Text>
-                    </View>
+          </View>
                     <Text style={styles.driverName}>{driver.name}</Text>
                   </LinearGradient>
                 </TouchableOpacity>
@@ -362,201 +366,62 @@ export default function AdminDashboard() {
           )}
         </View>
 
-        {/* Stats Row */}
-        <View style={styles.statsRow}>
-          <View style={styles.earningsCard}>
-            <Text style={styles.earningsLabel}>Total Earnings</Text>
-            <Text style={styles.earningsValue}>$24,856</Text>
-            <Text style={styles.percentChange}>+12.5%</Text>
-          </View>
-
-          <View style={styles.driversCard}>
-            <Text style={styles.driversLabel}>Active Drivers</Text>
-            <Text style={styles.driversCount}>142</Text>
-          </View>
-        </View>
-        
-        <View style={styles.graphSection}>
-          <Text style={styles.sectionTitle}>Performance</Text>
-          
-          <View style={styles.periodToggle}>
-            <TouchableOpacity 
-              style={[styles.periodButton, selectedPeriod === 'Daily' && styles.activePeriodButton]}
-              onPress={() => setSelectedPeriod('Daily')}
-            >
-              <Text style={[styles.periodButtonText, selectedPeriod === 'Daily' && styles.activePeriodButtonText]}>Daily</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.periodButton, selectedPeriod === 'Weekly' && styles.activePeriodButton]}
-              onPress={() => setSelectedPeriod('Weekly')}
-            >
-              <Text style={styles.periodButtonText}>Weekly</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.periodButton, selectedPeriod === 'Monthly' && styles.activePeriodButton]}
-              onPress={() => setSelectedPeriod('Monthly')}
-            >
-              <Text style={styles.periodButtonText}>Monthly</Text>
-            </TouchableOpacity>
-          </View>
-          
-          {/* Custom chart implementation */}
-          <View style={styles.chartContainer}>
-            <View style={styles.chart}>
-              {data.map((value, index) => {
-                const height = (value / maxValue) * 180;
-                return (
-                  <View key={index} style={styles.barContainer}>
-                    <View style={[styles.bar, { height }]} />
-                    <Text style={styles.barLabel}>{days[index]}</Text>
-                  </View>
-                );
-              })}
-            </View>
-            <View style={styles.yAxis}>
-              <Text style={styles.yAxisLabel}>10000</Text>
-              <Text style={styles.yAxisLabel}>7500</Text>
-              <Text style={styles.yAxisLabel}>5000</Text>
-              <Text style={styles.yAxisLabel}>2500</Text>
-              <Text style={styles.yAxisLabel}>0</Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.driversSection}>
+        {/* Drivers List Section */}
+        <View style={styles.driversListSection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Drivers</Text>
-            <View style={styles.driverActions}>
-              <TouchableOpacity style={styles.iconButton}>
-                <Ionicons name="funnel-outline" size={18} color="black" />
+            <View style={styles.headerActions}>
+              <TouchableOpacity style={styles.actionButton}>
+                <Ionicons name="filter-outline" size={18} color="#000" />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.iconButton}>
-                <Ionicons name="search-outline" size={18} color="black" />
+              <TouchableOpacity style={styles.actionButton}>
+                <Ionicons name="search-outline" size={18} color="#000" />
               </TouchableOpacity>
             </View>
           </View>
           
-          <View style={styles.driversList}>
-            {/* Driver 1 */}
-            <View style={styles.driverItem}>
-              <Image 
-                source={{ uri: 'https://randomuser.me/api/portraits/men/32.jpg' }} 
-                style={styles.driverAvatar} 
-              />
-              <View style={styles.driverInfo}>
-                <Text style={styles.listDriverName}>John Smith</Text>
-                <View style={styles.driverMeta}>
-                  <View style={styles.statusBadge}>
-                    <Text style={styles.statusText}>active</Text>
+          {isLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#000" />
+              <Text style={styles.loadingText}>Loading drivers...</Text>
                   </View>
-                  <Text style={styles.tripCount}>1,234 trips</Text>
-                </View>
-              </View>
-              <View style={styles.driverRating}>
-                {[1, 2, 3, 4, 5].map((star, index) => (
-                  <Ionicons 
-                    key={index} 
-                    name="star" 
-                    size={14} 
-                    color="#FFD700" 
-                  />
-                ))}
-              </View>
+          ) : activeDrivers.length === 0 ? (
+            <View style={styles.noDataContainer}>
+              <Text style={styles.noDataText}>No drivers found</Text>
             </View>
-            
-            {/* Driver 2 */}
-            <View style={styles.driverItem}>
-              <Image 
-                source={{ uri: 'https://randomuser.me/api/portraits/women/44.jpg' }} 
-                style={styles.driverAvatar} 
-              />
-              <View style={styles.driverInfo}>
-                <Text style={styles.listDriverName}>Sarah Johnson</Text>
-                <View style={styles.driverMeta}>
-                  <View style={styles.statusBadge}>
-                    <Text style={styles.statusText}>active</Text>
+          ) : (
+            <View style={styles.driversList}>
+              {activeDrivers.slice(0, 5).map((driver) => (
+                <TouchableOpacity 
+                  key={driver.id}
+                  style={styles.driverItem}
+                  onPress={() => router.push({
+                    pathname: '/dashboard/driver-statistics',
+                    params: { id: driver.id, name: driver.name }
+                  })}
+                >
+                  <View style={styles.driverAvatar}>
+                    <Text style={styles.avatarText}>{driver.name.charAt(0).toUpperCase()}</Text>
                   </View>
-                  <Text style={styles.tripCount}>2,156 trips</Text>
-                </View>
-              </View>
-              <View style={styles.driverRating}>
-                {[1, 2, 3, 4, 5].map((star, index) => (
-                  <Ionicons 
-                    key={index} 
-                    name={index < 4 ? "star" : "star-half"} 
-                    size={14} 
-                    color="#FFD700" 
-                  />
-                ))}
-              </View>
-            </View>
-            
-            {/* Driver 3 */}
-            <View style={styles.driverItem}>
-              <Image 
-                source={{ uri: 'https://randomuser.me/api/portraits/men/67.jpg' }} 
-                style={styles.driverAvatar}
-              />
               <View style={styles.driverInfo}>
-                <Text style={styles.listDriverName}>Michael Brown</Text>
-                <View style={styles.driverMeta}>
-                  <View style={[styles.statusBadge, styles.inactiveStatus]}>
-                    <Text style={styles.statusText}>inactive</Text>
+                    <Text style={styles.listDriverName}>{driver.name}</Text>
+                    <Text style={styles.driverEmail}>{driver.email}</Text>
                   </View>
-                  <Text style={styles.tripCount}>987 trips</Text>
-                </View>
-              </View>
-              <View style={styles.driverRating}>
-                {[1, 2, 3, 4, 5].map((star, index) => (
-                  <Ionicons 
-                    key={index} 
-                    name={index < 4 ? "star" : "star-half"} 
-                    size={14} 
-                    color="#FFD700" 
-                  />
-                ))}
-              </View>
+                  <Ionicons name="chevron-forward" size={20} color="#888" />
+                </TouchableOpacity>
+              ))}
+              
+              {activeDrivers.length > 5 && (
+                <TouchableOpacity 
+                  style={styles.viewAllButton}
+                  onPress={() => router.push('/dashboard/users')}
+                >
+                  <Text style={styles.viewAllText}>View All Drivers</Text>
+                  <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
+                </TouchableOpacity>
+              )}
             </View>
-          </View>
-        </View>
-        
-        <View style={styles.activitySection}>
-          <Text style={styles.sectionTitle}>Recent Activity</Text>
-          
-          <View style={styles.activityList}>
-            <View style={styles.activityItem}>
-              <View style={styles.activityTimeContainer}>
-                <Text style={styles.activityTime}>2 mins ago</Text>
-              </View>
-              <Text style={styles.activityText}>New driver registration: David Wilson</Text>
-            </View>
-            
-            <View style={styles.activityItem}>
-              <View style={styles.activityTimeContainer}>
-                <Text style={styles.activityTime}>15 mins ago</Text>
-              </View>
-              <Text style={styles.activityText}>Payment processed: $1,234.56</Text>
-            </View>
-            
-            <View style={styles.activityItem}>
-              <View style={styles.activityTimeContainer}>
-                <Text style={styles.activityTime}>1 hour ago</Text>
-              </View>
-              <Text style={styles.activityText}>Trip completed: John Smith</Text>
-            </View>
-          </View>
-        </View>
-        
-        <View style={styles.actionButtons}>
-          <TouchableOpacity style={styles.actionButton}>
-            <Text style={styles.actionButtonText}>Add New Driver</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={[styles.actionButton, styles.secondaryButton]}>
-            <Text style={[styles.actionButtonText, styles.secondaryButtonText]}>Manage Payments</Text>
-          </TouchableOpacity>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -704,241 +569,6 @@ const styles = StyleSheet.create({
     color: '#FF3B30',
     fontWeight: '500',
   },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-    paddingHorizontal: 20,
-  },
-  earningsCard: {
-    backgroundColor: '#f5f5f5',
-    borderRadius: 10,
-    padding: 15,
-    width: '65%',
-  },
-  earningsLabel: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 5,
-  },
-  earningsValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  percentChange: {
-    fontSize: 12,
-    color: 'green',
-    marginTop: 5,
-  },
-  driversCard: {
-    backgroundColor: '#f5f5f5',
-    borderRadius: 10,
-    padding: 15,
-    width: '30%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  driversLabel: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 5,
-  },
-  driversCount: {
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  graphSection: {
-    marginBottom: 20,
-    paddingHorizontal: 20,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 10,
-  },
-  periodToggle: {
-    flexDirection: 'row',
-    marginBottom: 15,
-  },
-  periodButton: {
-    paddingVertical: 5,
-    paddingHorizontal: 15,
-    marginRight: 10,
-  },
-  activePeriodButton: {
-    backgroundColor: '#000',
-    borderRadius: 15,
-  },
-  periodButtonText: {
-    fontSize: 12,
-    color: '#666',
-  },
-  activePeriodButtonText: {
-    color: '#fff',
-  },
-  chartContainer: {
-    flexDirection: 'row',
-    height: 220,
-    marginVertical: 10,
-    paddingRight: 10,
-  },
-  yAxis: {
-    width: 35,
-    height: '100%',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    paddingVertical: 10,
-  },
-  yAxisLabel: {
-    fontSize: 10,
-    color: '#666',
-  },
-  chart: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    paddingLeft: 5,
-    height: '100%',
-  },
-  barContainer: {
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    width: (screenWidth - 35) / 7 - 5,
-  },
-  bar: {
-    width: 8,
-    backgroundColor: 'black',
-    borderRadius: 5,
-  },
-  barLabel: {
-    fontSize: 10,
-    marginTop: 5,
-    color: '#666',
-  },
-  driversSection: {
-    marginBottom: 20,
-    paddingHorizontal: 20,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  driverActions: {
-    flexDirection: 'row',
-  },
-  iconButton: {
-    marginLeft: 15,
-  },
-  driversList: {
-    backgroundColor: '#f5f5f5',
-    borderRadius: 10,
-    paddingVertical: 5,
-  },
-  driverItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  driverAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 10,
-  },
-  driverInfo: {
-    flex: 1,
-  },
-  listDriverName: {
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  driverName: {
-    fontSize: 14,
-    color: '#ffffff',
-    fontWeight: 'bold',
-    textAlign: 'right',
-  },
-  driverMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  statusBadge: {
-    backgroundColor: '#e6f7ee',
-    borderRadius: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    marginRight: 8,
-  },
-  inactiveStatus: {
-    backgroundColor: '#ffeeee',
-  },
-  statusText: {
-    fontSize: 10,
-    color: '#666',
-  },
-  tripCount: {
-    fontSize: 12,
-    color: '#666',
-  },
-  driverRating: {
-    flexDirection: 'row',
-  },
-  activitySection: {
-    marginBottom: 20,
-    paddingHorizontal: 20,
-  },
-  activityList: {
-    backgroundColor: '#f5f5f5',
-    borderRadius: 10,
-    padding: 15,
-  },
-  activityItem: {
-    marginBottom: 15,
-  },
-  activityTimeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 5,
-  },
-  activityTime: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#666',
-  },
-  activityText: {
-    fontSize: 14,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 30,
-    paddingHorizontal: 20,
-  },
-  actionButton: {
-    backgroundColor: '#000',
-    borderRadius: 10,
-    paddingVertical: 15,
-    width: '48%',
-    alignItems: 'center',
-  },
-  secondaryButton: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#000',
-  },
-  actionButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  secondaryButtonText: {
-    color: '#000',
-  },
   backgroundGradient: {
     position: 'absolute',
     top: 0,
@@ -1010,5 +640,87 @@ const styles = StyleSheet.create({
   noDataText: {
     fontSize: 16,
     color: '#666',
+  },
+  driverName: {
+    fontSize: 14,
+    color: '#ffffff',
+    fontWeight: 'bold',
+    textAlign: 'right',
+  },
+  driversListSection: {
+    marginBottom: 20,
+    paddingHorizontal: 20,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 15,
+    marginBottom: 10,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  actionButton: {
+    padding: 8,
+    marginLeft: 10,
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+  },
+  driversList: {
+  },
+  driverItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 15,
+    marginBottom: 10,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+  },
+  driverAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  driverInfo: {
+    flex: 1,
+  },
+  listDriverName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  driverEmail: {
+    color: '#666',
+    fontSize: 12,
+  },
+  viewAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    backgroundColor: '#000',
+    borderRadius: 12,
+    marginTop: 10,
+  },
+  viewAllText: {
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: '600',
+    marginRight: 5,
   },
 }); 
