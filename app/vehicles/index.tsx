@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/ThemedText';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/contexts/ToastContext';
 import { getAllVehicles, deleteVehicle } from '@/services/vehicle.service';
 
 // Define the vehicle type
@@ -44,6 +45,7 @@ type Vehicle = {
 
 export default function VehicleListScreen() {
   const { user, authToken } = useAuth();
+  const toast = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -75,7 +77,7 @@ export default function VehicleListScreen() {
       }
     } catch (error) {
       console.error('Error fetching vehicles:', error);
-      Alert.alert('Error', 'Failed to load vehicles. Please try again.');
+      toast.showToast('error', 'Error', 'Failed to load vehicles. Please try again.');
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -127,10 +129,10 @@ export default function VehicleListScreen() {
                 setVehicles(prevVehicles => 
                   prevVehicles.filter(v => v.id !== vehicleId)
                 );
-                Alert.alert('Success', 'Vehicle deleted successfully');
+                toast.showToast('success', 'Success', 'Vehicle deleted successfully');
               } catch (error) {
                 console.error('Delete error:', error);
-                Alert.alert('Error', 'Failed to delete vehicle. Please try again.');
+                toast.showToast('error', 'Error', 'Failed to delete vehicle. Please try again.');
               } finally {
                 setIsLoading(false);
               }
@@ -140,16 +142,13 @@ export default function VehicleListScreen() {
       );
     } catch (error) {
       console.error('Delete error:', error);
-      Alert.alert('Error', 'Failed to delete vehicle');
+      toast.showToast('error', 'Error', 'Failed to delete vehicle');
     }
   };
 
   const handleViewDetails = (vehicle: Vehicle) => {
-    // Use a simplified approach for navigation to avoid type errors
-    router.navigate({
-      pathname: "/vehicles/[id]",
-      params: { id: vehicle.id }
-    });
+    // Use router.push with a correctly formatted path string
+    router.push(`/vehicles/${vehicle.id}`);
   };
 
   return (

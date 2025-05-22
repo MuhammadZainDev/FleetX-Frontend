@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   StyleSheet, 
   View, 
@@ -7,14 +7,16 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  FlatList
+  FlatList,
+  Modal
 } from 'react-native';
 import { router, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
-import { getAllExpenses } from '@/services/expense.service';
+import { useToast } from '@/contexts/ToastContext';
+import { getAllExpenses, deleteExpense } from '@/services/expense.service';
 
 // Define data types
 type ExpenseType = {
@@ -36,6 +38,7 @@ type ExpenseType = {
 export default function AllExpensesScreen() {
   const { user } = useAuth();
   const router = useRouter();
+  const toast = useToast();
   
   // States
   const [expenses, setExpenses] = useState<ExpenseType[]>([]);
@@ -43,6 +46,12 @@ export default function AllExpensesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedFilter, setSelectedFilter] = useState<string | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [selectedExpense, setSelectedExpense] = useState<ExpenseType | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  
+  // Double click detection
+  const lastTapRef = useRef<{ id: string; time: number } | null>(null);
   
   // Role-based protection - only Driver can access this screen
   useEffect(() => {
@@ -155,9 +164,67 @@ export default function AllExpensesScreen() {
     router.push('/dashboard/driver' as any);
   };
   
+  // Handle expense item press for double-click detection
+  const handleExpensePress = (expense: ExpenseType) => {
+    const now = Date.now();
+    
+    // Check if this is a double tap (within 300ms of the last tap on the same item)
+    if (
+      lastTapRef.current && 
+      lastTapRef.current.id === expense.id && 
+      now - lastTapRef.current.time < 300
+    ) {
+      // Double-tap detected - show delete confirmation
+      setSelectedExpense(expense);
+      setShowDeleteModal(true);
+      lastTapRef.current = null;
+    } else {
+      // First tap - record it
+      lastTapRef.current = { id: expense.id, time: now };
+    }
+  };
+  
+  // Handle expense deletion
+  const handleDeleteExpense = async () => {
+    if (!selectedExpense) return;
+    
+    setIsDeleting(true);
+    
+    try {
+      await deleteExpense(selectedExpense.id);
+      
+      // Update the local state to remove the deleted expense
+      setExpenses(prevExpenses => 
+        prevExpenses.filter(expense => expense.id !== selectedExpense.id)
+      );
+      
+      // Show success toast message
+      toast.showToast('success', 'Success', 'Expense deleted successfully');
+    } catch (error) {
+      console.error('Error deleting expense:', error);
+      
+      // Extract the error message more carefully
+      let errorMessage = 'An unknown error occurred';
+      if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      // Show error toast message
+      toast.showToast('error', 'Error', `Failed to delete expense: ${errorMessage}`);
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteModal(false);
+      setSelectedExpense(null);
+    }
+  };
+  
   // Render each expense item
   const renderExpenseItem = ({ item }: { item: ExpenseType }) => (
-    <View style={styles.expenseItem}>
+    <TouchableOpacity 
+      style={styles.expenseItem}
+      onPress={() => handleExpensePress(item)}
+      activeOpacity={0.7}
+    >
       <View style={styles.expenseIconContainer}>
         <Ionicons 
           name={getCategoryIcon(item.category)} 
@@ -173,7 +240,7 @@ export default function AllExpensesScreen() {
         <Text style={styles.expenseNote}>{item.note}</Text>
       </View>
       <Text style={styles.expenseAmount}>{formatCurrency(item.amount)}</Text>
-    </View>
+    </TouchableOpacity>
   );
   
   // Render filter buttons
@@ -282,6 +349,49 @@ export default function AllExpensesScreen() {
           )}
         />
       )}
+      
+      {/* Delete Confirmation Modal */}
+      <Modal
+        visible={showDeleteModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowDeleteModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.simpleModalContainer}>
+            <View style={styles.simpleModalContent}>
+              <Text style={styles.simpleModalText}>
+                Are you sure you want to delete this expense?
+              </Text>
+            </View>
+            
+            <View style={styles.simpleModalActions}>
+              <TouchableOpacity 
+                style={styles.simpleModalCancel}
+                onPress={() => {
+                  setShowDeleteModal(false);
+                  setSelectedExpense(null);
+                }}
+                disabled={isDeleting}
+              >
+                <Text style={styles.simpleModalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.simpleModalDelete}
+                onPress={handleDeleteExpense}
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.simpleModalDeleteText}>Delete</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -440,6 +550,63 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   addExpenseButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  simpleModalContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    width: '85%',
+    maxWidth: 320,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  simpleModalContent: {
+    padding: 24,
+  },
+  simpleModalText: {
+    fontSize: 16,
+    color: '#333',
+    textAlign: 'center',
+  },
+  simpleModalActions: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+  },
+  simpleModalCancel: {
+    flex: 1,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRightWidth: 1,
+    borderRightColor: '#e0e0e0',
+  },
+  simpleModalCancelText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  simpleModalDelete: {
+    flex: 1,
+    paddingVertical: 16,
+    backgroundColor: '#000',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  simpleModalDeleteText: {
+    fontSize: 16,
     color: '#fff',
     fontWeight: '600',
   },

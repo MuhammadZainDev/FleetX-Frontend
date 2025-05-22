@@ -19,6 +19,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/contexts/ToastContext';
 import { getVehicleById, updateVehicle, getAvailableDrivers } from '@/services/vehicle.service';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -53,6 +54,7 @@ type Vehicle = {
 export default function EditVehicleScreen() {
   const { id } = useLocalSearchParams();
   const { authToken } = useAuth();
+  const toast = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [availableDrivers, setAvailableDrivers] = useState<Driver[]>([]);
@@ -126,7 +128,7 @@ export default function EditVehicleScreen() {
         }
       } catch (error) {
         console.error('Error fetching data:', error);
-        Alert.alert('Error', 'Failed to load vehicle data. Please try again.');
+        toast.showToast('error', 'Error', 'Failed to load vehicle data');
         router.back();
       } finally {
         setIsLoading(false);
@@ -142,7 +144,7 @@ export default function EditVehicleScreen() {
       // Request permission
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Please grant camera roll permissions to upload an image');
+        toast.showToast('error', 'Permission Required', 'Please grant camera roll permissions to upload an image');
         return;
       }
       
@@ -159,7 +161,7 @@ export default function EditVehicleScreen() {
       }
     } catch (error) {
       console.error('Error picking image:', error);
-      Alert.alert('Error', 'Failed to select image');
+      toast.showToast('error', 'Error', 'Failed to select image');
     }
   };
 
@@ -206,7 +208,7 @@ export default function EditVehicleScreen() {
     try {
       // Validate form
       if (!name || !plate) {
-        Alert.alert('Error', 'Vehicle name and plate number are required');
+        toast.showToast('error', 'Error', 'Vehicle name and plate number are required');
         return;
       }
       
@@ -241,14 +243,15 @@ export default function EditVehicleScreen() {
       const response = await updateVehicle(vehicleData, imageToUpload, authToken);
       
       // Show success message
-      Alert.alert(
-        'Success', 
-        'Vehicle updated successfully', 
-        [{ text: 'OK', onPress: () => router.back() }]
-      );
+      toast.showToast('success', 'Success', 'Vehicle updated successfully');
+      
+      // Navigate back after a short delay to let the toast appear
+      setTimeout(() => {
+        router.back();
+      }, 500);
     } catch (error) {
       console.error('Error updating vehicle:', error);
-      Alert.alert('Error', 'Failed to update vehicle. Please try again.');
+      toast.showToast('error', 'Error', 'Failed to update vehicle. Please try again.');
     } finally {
       setIsSubmitting(false);
     }

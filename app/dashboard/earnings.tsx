@@ -10,7 +10,8 @@ import {
   Animated,
   Easing,
   ActivityIndicator,
-  Alert
+  Alert,
+  Modal
 } from 'react-native';
 import { router, useRouter, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -18,7 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
-import { getEarningsSummary, getAllEarnings } from '@/services/earning.service';
+import { getEarningsSummary, getAllEarnings, deleteEarning } from '@/services/earning.service';
 import { generateEarningsPDF } from '@/services/pdf.service';
 
 const screenWidth = Dimensions.get('window').width - 40;
@@ -69,6 +70,11 @@ export default function EarningsScreen() {
   const [recentEarnings, setRecentEarnings] = useState<EarningType[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [selectedEarning, setSelectedEarning] = useState<EarningType | null>(null);
+  const [isDeletingEarning, setIsDeletingEarning] = useState(false);
+  const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const clickCountRef = useRef(0);
 
   // Role-based protection - only Driver can access this screen
   useEffect(() => {
@@ -294,6 +300,60 @@ export default function EarningsScreen() {
     }
   };
 
+  // Handle double click on an earning item
+  const handleEarningPress = (earning: EarningType) => {
+    clickCountRef.current += 1;
+    
+    if (clickCountRef.current === 1) {
+      // First click
+      clickTimeoutRef.current = setTimeout(() => {
+        // Reset if not double clicked within 300ms
+        clickCountRef.current = 0;
+        // Handle single click here if needed
+      }, 300);
+    } else if (clickCountRef.current === 2) {
+      // Double click
+      if (clickTimeoutRef.current) {
+        clearTimeout(clickTimeoutRef.current);
+      }
+      clickCountRef.current = 0;
+      
+      // Show delete confirmation modal
+      setSelectedEarning(earning);
+      setShowDeleteModal(true);
+    }
+  };
+
+  // Handle delete earning
+  const handleDeleteEarning = async () => {
+    if (!selectedEarning || !user?.id) return;
+    
+    try {
+      setIsDeletingEarning(true);
+      
+      // Call the delete API
+      await deleteEarning(selectedEarning.id);
+      
+      // Remove the deleted earning from state
+      setRecentEarnings(prev => prev.filter(e => e.id !== selectedEarning.id));
+      
+      // Show success toast
+      toast.showToast('success', 'Success', 'Earning deleted successfully');
+      
+      // Close the modal
+      setShowDeleteModal(false);
+      setSelectedEarning(null);
+      
+      // Re-fetch the earnings summary
+      fetchEarningsData();
+    } catch (error) {
+      console.error('Error deleting earning:', error);
+      toast.showToast('error', 'Error', 'Failed to delete earning. Please try again.');
+    } finally {
+      setIsDeletingEarning(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
@@ -483,7 +543,12 @@ export default function EarningsScreen() {
             {recentEarnings.length > 0 ? (
               <View style={styles.paymentsList}>
                 {recentEarnings.slice(0, 5).map((earning, index) => (
-                  <View key={earning.id} style={styles.paymentItem}>
+                  <TouchableOpacity 
+                    key={earning.id} 
+                    style={styles.paymentItem}
+                    onPress={() => handleEarningPress(earning)}
+                    activeOpacity={0.7}
+                  >
                     <View style={styles.paymentIconContainer}>
                       <Ionicons 
                         name={
@@ -501,7 +566,7 @@ export default function EarningsScreen() {
                       <Text style={styles.paymentDate}>{formatDate(earning.date)}</Text>
                     </View>
                     <Text style={styles.paymentAmount}>{formatAmount(earning.amount)}</Text>
-                  </View>
+                  </TouchableOpacity>
                 ))}
                 
                 <TouchableOpacity 
@@ -562,6 +627,48 @@ export default function EarningsScreen() {
           </View>
         </ScrollView>
       )}
+      
+      {/* Delete Confirmation Modal */}
+      <Modal
+        visible={showDeleteModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowDeleteModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.simpleModalContainer}>
+            <View style={styles.simpleModalContent}>
+              <Text style={styles.simpleModalText}>
+                Are you sure you want to delete this earning?
+              </Text>
+            </View>
+            
+            <View style={styles.simpleModalActions}>
+              <TouchableOpacity 
+                style={styles.simpleModalCancel}
+                onPress={() => {
+                  setShowDeleteModal(false);
+                  setSelectedEarning(null);
+                }}
+              >
+                <Text style={styles.simpleModalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.simpleModalDelete}
+                onPress={handleDeleteEarning}
+                disabled={isDeletingEarning}
+              >
+                {isDeletingEarning ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.simpleModalDeleteText}>Delete</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -909,5 +1016,61 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     backgroundColor: '#ccc',
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  simpleModalContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    width: '85%',
+    maxWidth: 320,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  simpleModalContent: {
+    padding: 24,
+  },
+  simpleModalText: {
+    fontSize: 16,
+    color: '#333',
+    textAlign: 'center',
+  },
+  simpleModalActions: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+  },
+  simpleModalCancel: {
+    flex: 1,
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderRightWidth: 0.5,
+    borderRightColor: '#e0e0e0',
+  },
+  simpleModalCancelText: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '500',
+  },
+  simpleModalDelete: {
+    flex: 1,
+    paddingVertical: 16,
+    alignItems: 'center',
+    backgroundColor: '#000',
+  },
+  simpleModalDeleteText: {
+    fontSize: 16,
+    color: '#fff',
+    fontWeight: '600',
   },
 }); 
