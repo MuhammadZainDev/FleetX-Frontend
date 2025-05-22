@@ -353,7 +353,7 @@ export default function AdminDashboard() {
                     end={{ x: 1, y: 1 }}
                   >
                     <View style={[styles.cardContent, { justifyContent: 'flex-start', marginTop: 8 }]}>
-                      <Text style={styles.amountLabel}>Total Earnings</Text>
+                                            <Text style={styles.amountLabel}>Total Earnings</Text>
                       <Text style={styles.amount}>
                         AED {(driverEarnings[driver.id]?.totalEarnings || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </Text>
@@ -406,6 +406,19 @@ export default function AdminDashboard() {
               <View style={styles.driverInfo}>
                     <Text style={styles.listDriverName}>{driver.name}</Text>
                     <Text style={styles.driverEmail}>{driver.email}</Text>
+                    <TouchableOpacity 
+                      style={styles.accountsLink}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        router.push({
+                          pathname: '/dashboard/driver-accounts',
+                          params: { id: driver.id, name: driver.name }
+                        });
+                      }}
+                    >
+                      <Text style={styles.accountsLinkText}>Accounts</Text>
+                      <Ionicons name="wallet-outline" size={12} color="#000" />
+                    </TouchableOpacity>
                   </View>
                   <Ionicons name="chevron-forward" size={20} color="#888" />
                 </TouchableOpacity>
@@ -432,6 +445,19 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
+  },
+  viewAccountsButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    marginTop: 10,
+    alignSelf: 'flex-start',
+  },
+  viewAccountsButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '500',
   },
   header: {
     flexDirection: 'row',
@@ -707,6 +733,21 @@ const styles = StyleSheet.create({
   driverEmail: {
     color: '#666',
     fontSize: 12,
+    marginBottom: 4,
+  },
+  accountsLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  accountsLinkText: {
+    fontSize: 10,
+    color: '#000',
+    marginRight: 4,
   },
   viewAllButton: {
     flexDirection: 'row',

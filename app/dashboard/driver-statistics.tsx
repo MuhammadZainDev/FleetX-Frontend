@@ -271,136 +271,121 @@ export default function DriverStatistics() {
         </View>
       ) : (
         <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-          {/* Driver Info Card */}
-          <View style={styles.card}>
-            <View style={styles.cardContent}>
-              <Text style={styles.cardTitle}>Driver Information</Text>
-              <Text style={styles.driverName}>{driver?.name || driverName || 'Driver'}</Text>
-              
-              <View style={styles.infoRow}>
-                <Ionicons name="mail-outline" size={16} color="#666" />
-                <Text style={styles.infoText}>{driver?.email || 'No email available'}</Text>
-              </View>
-              
-              <View style={styles.infoRow}>
-                <Ionicons name="call-outline" size={16} color="#666" />
-                <Text style={styles.infoText}>{driver?.phoneNumber || 'No phone number available'}</Text>
-              </View>
-              
-              <View style={styles.statusIndicator}>
-                <View style={[styles.statusDot, { 
-                  backgroundColor: driver && driver.isActive !== undefined 
-                    ? (driver.isActive ? '#4CAF50' : '#FF3B30') 
-                    : '#999'
-                }]} />
-                <Text style={[styles.statusText, {
-                  color: driver && driver.isActive !== undefined 
-                    ? (driver.isActive ? '#4CAF50' : '#FF3B30') 
-                    : '#999'
-                }]}>
-                  {driver && driver.isActive !== undefined 
-                    ? (driver.isActive ? 'Active' : 'Inactive') 
-                    : 'Status unknown'}
-                </Text>
-              </View>
-            </View>
-          </View>
-          
-          {/* Earnings Card */}
-          <View style={styles.card}>
-            <View style={styles.cardContent}>
-              <Text style={styles.cardTitle}>Financial Summary</Text>
-              
-              <View style={styles.financialRow}>
-                <Text style={styles.financialLabel}>Total Earnings:</Text>
-                <Text style={styles.financialValue}>AED {totalEarnings.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
-              </View>
-              
-              <View style={styles.financialRow}>
-                <Text style={styles.financialLabel}>Total Expenses:</Text>
-                <Text style={styles.financialValue}>AED {totalExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
-              </View>
-              
-              <View style={styles.financialRow}>
-                <Text style={styles.financialLabel}>Auto Expenses:</Text>
-                <Text style={styles.financialValue}>AED {totalAutoExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
-              </View>
-              
-              <View style={styles.divider} />
-              
-              <View style={styles.financialRow}>
-                <Text style={styles.financialLabel}>Net Income:</Text>
-                <Text style={[styles.financialValue, { color: netIncome >= 0 ? '#4CAF50' : '#FF3B30' }]}>
-                  AED {netIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </Text>
-              </View>
-              
-              <TouchableOpacity 
-                style={styles.viewDetailButton}
-                onPress={() => router.push({
-                  pathname: '/dashboard/driver-detail',
-                  params: { id: driverId, name: driver?.name || driverName || 'Driver' }
-                })}
-              >
-                <View style={styles.viewDetailButtonContent}>
-                  <Text style={styles.viewDetailButtonText}>View Detail</Text>
-                  <Ionicons name="arrow-forward" size={18} color="black" />
+          {/* Dashboard Cards - 4 black cards in vertical layout */}
+          <View style={styles.dashboardCardsContainer}>
+            {/* Earnings Card */}
+            <TouchableOpacity 
+              style={styles.dashboardCard}
+              onPress={() => router.push({
+                pathname: '/dashboard/driver-detail',
+                params: { 
+                  id: driverId, 
+                  name: driver?.name || driverName || 'Driver',
+                  filter: 'earnings'
+                }
+              })}
+            >
+              <View style={styles.dashboardCardContent}>
+                <View style={styles.dashboardCardHeader}>
+                  <Text style={styles.dashboardCardLabel}>Total Earnings</Text>
+                  <Ionicons name="cash-outline" size={20} color="#4CAF50" />
                 </View>
-              </TouchableOpacity>
-            </View>
-          </View>
-          
-          {/* Vehicles Card */}
-          <View style={styles.card}>
-            <View style={styles.cardContent}>
-              <Text style={styles.cardTitle}>Assigned Vehicles</Text>
-              
-              {vehicles.length === 0 ? (
-                <Text style={styles.noVehiclesText}>No vehicles assigned</Text>
-              ) : (
-                vehicles.map((vehicle, index) => (
-                  <View key={vehicle.id} style={styles.vehicleItem}>
-                    {index > 0 && <View style={styles.vehicleDivider} />}
-                    
-                    <Text style={styles.vehicleName}>{vehicle.name}</Text>
-                    
-                    <View style={styles.vehicleDetails}>
-                      <View style={styles.vehicleDetail}>
-                        <Ionicons name="car-outline" size={14} color="#666" />
-                        <Text style={styles.vehicleDetailText}>{vehicle.type || 'Unknown'}</Text>
-                      </View>
-                      
-                      <View style={styles.vehicleDetail}>
-                        <Ionicons name="id-card-outline" size={14} color="#666" />
-                        <Text style={styles.vehicleDetailText}>{vehicle.plate || 'No plate'}</Text>
-                      </View>
-                      
-                      <View style={styles.vehicleDetail}>
-                        <Ionicons name="color-palette-outline" size={14} color="#666" />
-                        <Text style={styles.vehicleDetailText}>{vehicle.color || 'Unknown'}</Text>
-                      </View>
-                      
-                      <View style={styles.vehicleDetail}>
-                        <Ionicons name={
-                          vehicle.status === 'active' ? "checkmark-circle-outline" :
-                          vehicle.status === 'maintenance' ? "construct-outline" : "alert-circle-outline"
-                        } size={14} color={
-                          vehicle.status === 'active' ? "#4CAF50" :
-                          vehicle.status === 'maintenance' ? "#FF9800" : "#FF3B30"
-                        } />
-                        <Text style={[styles.vehicleDetailText, {
-                          color: vehicle.status === 'active' ? "#4CAF50" :
-                                vehicle.status === 'maintenance' ? "#FF9800" : "#FF3B30"
-                        }]}>
-                          {vehicle.status === 'active' ? 'Active' :
-                           vehicle.status === 'maintenance' ? 'Maintenance' : 'Inactive'}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-                ))
-              )}
-            </View>
+                <Text style={styles.dashboardCardAmount}>
+                  AED {totalEarnings.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </Text>
+                <Text style={styles.dashboardCardDriver}>{driver?.name || driverName || 'Driver'}</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Expenses Card */}
+            <TouchableOpacity 
+              style={styles.dashboardCard}
+              onPress={() => router.push({
+                pathname: '/dashboard/driver-detail',
+                params: { 
+                  id: driverId, 
+                  name: driver?.name || driverName || 'Driver',
+                  filter: 'expenses' 
+                }
+              })}
+            >
+              <View style={styles.dashboardCardContent}>
+                <View style={styles.dashboardCardHeader}>
+                  <Text style={styles.dashboardCardLabel}>Total Expenses</Text>
+                  <Ionicons name="wallet-outline" size={20} color="#ff4444" />
+                </View>
+                <Text style={styles.dashboardCardAmount}>
+                  AED {totalExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </Text>
+                <Text style={styles.dashboardCardDriver}>{driver?.name || driverName || 'Driver'}</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Auto Expense Card */}
+            <TouchableOpacity 
+              style={styles.dashboardCard}
+              onPress={() => router.push({
+                pathname: '/dashboard/driver-detail',
+                params: { 
+                  id: driverId, 
+                  name: driver?.name || driverName || 'Driver', 
+                  filter: 'autoExpenses'
+                }
+              })}
+            >
+              <View style={styles.dashboardCardContent}>
+                <View style={styles.dashboardCardHeader}>
+                  <Text style={styles.dashboardCardLabel}>Auto Expense</Text>
+                  <Ionicons name="car-outline" size={20} color="#FF9800" />
+                </View>
+                <Text style={styles.dashboardCardAmount}>
+                  AED {totalAutoExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </Text>
+                <Text style={styles.dashboardCardDriver}>{driver?.name || driverName || 'Driver'}</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Monthly Salary Card */}
+            <TouchableOpacity 
+              style={styles.dashboardCard}
+              onPress={() => router.push({
+                pathname: '/dashboard/driver-detail',
+                params: { 
+                  id: driverId, 
+                  name: driver?.name || driverName || 'Driver',
+                  filter: 'all'
+                }
+              })}
+            >
+              <View style={styles.dashboardCardContent}>
+                <View style={styles.dashboardCardHeader}>
+                  <Text style={styles.dashboardCardLabel}>This Month Income</Text>
+                  <Ionicons 
+                    name={((totalEarnings * 0.3) - totalExpenses) >= 0 ? "trending-up" : "trending-down"} 
+                    size={20} 
+                    color={((totalEarnings * 0.3) - totalExpenses) >= 0 ? "#4CAF50" : "#ff4444"} 
+                  />
+                </View>
+                <Text style={[styles.dashboardCardAmount, { color: ((totalEarnings * 0.3) - totalExpenses) >= 0 ? '#ffffff' : '#ff4444' }]}>
+                  AED {((totalEarnings * 0.3) - totalExpenses).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </Text>
+                <Text style={styles.dashboardCardDriver}>{driver?.name || driverName || 'Driver'}</Text>
+              </View>
+            </TouchableOpacity>
+            
+            {/* View Accounts Button */}
+            <TouchableOpacity 
+              style={styles.viewAccountsButton}
+              onPress={() => router.push({
+                pathname: '/dashboard/driver-accounts',
+                params: { id: driverId, name: driver?.name || driverName || 'Driver' }
+              })}
+            >
+              <View style={styles.viewAccountsButtonContent}>
+                <Text style={styles.viewAccountsButtonText}>View Accounts</Text>
+                <Ionicons name="wallet-outline" size={20} color="black" />
+              </View>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       )}
@@ -596,5 +581,75 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 16,
+    paddingHorizontal: 16,
+    marginTop: 24,
+  },
+  dashboardCardsContainer: {
+    paddingHorizontal: 4,
+    paddingVertical: 16,
+  },
+  dashboardCard: {
+    width: '100%',
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#000000',
+    marginBottom: 16,
+    padding: 22,
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: '#2C2C2C',
+    height: 170, // Increased height for better spacing
+  },
+  dashboardCardContent: {
+    flex: 1,
+    justifyContent: 'space-between', // Better spacing between elements
+  },
+  dashboardCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center', 
+    justifyContent: 'space-between',
+    marginBottom: 25, // Increase space between header and amount
+  },
+  dashboardCardLabel: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  dashboardCardAmount: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: 'bold',
+    marginBottom: 14,
+  },
+  dashboardCardDriver: {
+    color: '#aaa',
+    fontSize: 14,
+  },
+  viewAccountsButton: {
+    width: '100%',
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    padding: 16,
+    marginTop: 8,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#000000',
+  },
+  viewAccountsButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewAccountsButtonText: {
+    color: 'black',
+    fontWeight: 'bold',
+    fontSize: 16,
+    marginRight: 8,
   },
 }); 

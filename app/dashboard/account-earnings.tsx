@@ -84,14 +84,24 @@ export default function AccountEarningsScreen() {
       };
       
       const data = await getAllEarnings(filters);
-      setEarnings(data);
+      
+      // Filter out zero or invalid amounts
+      const validData = data.filter((item: EarningType) => {
+        const amount = parseFloat(String(item.amount));
+        return !isNaN(amount) && amount > 0;
+      });
+      
+      setEarnings(validData);
       
       // Process the data for each account type
-      const personalAccountData = data.filter((item: EarningType) => item.accountName === 'Personal Account');
-      const limousineAccountData = data.filter((item: EarningType) => item.accountName === 'Limousine Account');
+      const personalAccountData = validData.filter((item: EarningType) => item.accountName === 'Personal Account');
+      const limousineAccountData = validData.filter((item: EarningType) => item.accountName === 'Limousine Account');
       
       const personalTotal = personalAccountData.reduce((sum: number, item: EarningType) => sum + parseFloat(String(item.amount)), 0);
       const limousineTotal = limousineAccountData.reduce((sum: number, item: EarningType) => sum + parseFloat(String(item.amount)), 0);
+      
+      console.log('Personal Account entries:', personalAccountData.length, 'Total:', personalTotal);
+      console.log('Limousine Account entries:', limousineAccountData.length, 'Total:', limousineTotal);
       
       const accountsData: AccountEarnings[] = [
         {

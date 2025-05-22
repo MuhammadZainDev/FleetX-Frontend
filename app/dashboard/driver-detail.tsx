@@ -77,7 +77,21 @@ export default function DriverDetailScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'all' | 'earnings' | 'expenses' | 'autoExpenses'>('all');
+  
+  // Initialize activeTab based on filter parameter from URL
+  const getInitialTab = () => {
+    // Convert filter parameter to activeTab format
+    if (params.filter) {
+      const filterValue = params.filter as string;
+      if (filterValue === 'earnings') return 'earnings';
+      if (filterValue === 'expenses') return 'expenses';
+      if (filterValue === 'autoExpenses') return 'autoExpenses';
+      if (filterValue === 'all') return 'all';
+    }
+    return 'all'; // default
+  };
+  
+  const [activeTab, setActiveTab] = useState<'all' | 'earnings' | 'expenses' | 'autoExpenses'>(getInitialTab());
   
   // Fetch data
   const fetchData = async () => {

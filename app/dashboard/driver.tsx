@@ -583,7 +583,7 @@ export default function DriverDashboard() {
             >
               <View style={[styles.cardContent, { justifyContent: 'flex-start', marginTop: 8 }]}>
                 <View style={styles.cardHeaderRow}>
-                  <Text style={styles.amountLabel}>Total Earnings</Text>
+                <Text style={styles.amountLabel}>Total Earnings</Text>
                   <Ionicons 
                     name="cash-outline" 
                     size={20} 
@@ -610,7 +610,7 @@ export default function DriverDashboard() {
             >
               <View style={[styles.cardContent, { justifyContent: 'flex-start', marginTop: 8 }]}>
                 <View style={styles.cardHeaderRow}>
-                  <Text style={styles.amountLabel}>Total Expenses</Text>
+                <Text style={styles.amountLabel}>Total Expenses</Text>
                   <Ionicons 
                     name="wallet-outline" 
                     size={20} 
@@ -625,7 +625,7 @@ export default function DriverDashboard() {
               </View>
               <Text style={styles.driverName}>{userData?.name || user?.name || 'Loading...'}</Text>
             </LinearGradient>
-          </View>
+        </View>
 
           {/* Auto Expense Card */}
           <View style={styles.cardContainer}>
@@ -664,7 +664,7 @@ export default function DriverDashboard() {
             >
               <View style={[styles.cardContent, { justifyContent: 'flex-start', marginTop: 8 }]}>
                 <View style={styles.cardHeaderRow}>
-                  <Text style={styles.amountLabel}>This Month Income</Text>
+                <Text style={styles.amountLabel}>This Month Income</Text>
                   <Ionicons 
                     name={((totalEarnings * 0.3) - totalExpenses) >= 0 ? "trending-up" : "trending-down"} 
                     size={20} 

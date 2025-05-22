@@ -33,14 +33,14 @@ type EarningType = {
   };
 };
 
-export default function AccountDetailScreen() {
-  const { user } = useAuth();
+export default function AccountDetailScreen() {  const { user, authToken } = useAuth();
   const router = useRouter();
   const params = useLocalSearchParams();
   
-  // Get account name and total amount from params
+  // Get parameters from route
   const accountName = params.accountName as 'Personal Account' | 'Limousine Account';
   const totalAmount = parseFloat((params.totalAmount as string) || '0');
+  const paramDriverId = params.driverId as string;
   
   // States
   const [earnings, setEarnings] = useState<EarningType[]>([]);
@@ -48,13 +48,11 @@ export default function AccountDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // Role-based protection - only Driver can access this screen
+  // Role-based protection - only Driver and Admin can access this screen
   useEffect(() => {
-    if (user && user.role !== 'Driver') {
-      // Redirect non-driver users to their respective dashboards
-      if (user.role === 'Admin') {
-        router.replace('/dashboard/admin');
-      } else if (user.role === 'Viewer') {
+    if (user && user.role !== 'Driver' && user.role !== 'Admin') {
+      // Redirect non-authorized users to their respective dashboards
+      if (user.role === 'Viewer') {
         router.replace('/dashboard/viewer');
       }
     }
@@ -68,16 +66,29 @@ export default function AccountDetailScreen() {
     setError(null);
     
     try {
+      // Use the driver ID from params if available (for admin viewing a driver's account)
+      // Otherwise use the current user's ID (for driver viewing their own account)
+      const driverId = paramDriverId || user.id;
+      
       const filters = {
-        driverId: user.id,
+        driverId: driverId,
       };
       
-      const allEarnings = await getAllEarnings(filters);
+      // Pass authToken when retrieving other driver's data as admin
+      const allEarnings = await getAllEarnings(filters, paramDriverId ? authToken : undefined);
+      
+      // Filter out zero or invalid amounts
+      const validEarnings = allEarnings.filter((item: EarningType) => {
+        const amount = parseFloat(String(item.amount));
+        return !isNaN(amount) && amount > 0;
+      });
       
       // Filter earnings for this specific account
-      const filteredEarnings = allEarnings.filter(
+      const filteredEarnings = validEarnings.filter(
         (item: EarningType) => item.accountName === accountName
       );
+      
+      console.log(`Found ${filteredEarnings.length} valid transactions for ${accountName}`);
       
       setEarnings(filteredEarnings);
     } catch (err) {
@@ -140,7 +151,15 @@ export default function AccountDetailScreen() {
       <View style={styles.header}>
         <TouchableOpacity 
           style={styles.backButton}
-          onPress={() => router.push('/dashboard/account-earnings' as any)}
+          onPress={() => {
+            if (paramDriverId) {
+              // If viewing as admin (with driverId param), go back to driver accounts page
+              router.back();
+            } else {
+              // If viewing as driver (no driverId param), go to account-earnings
+              router.push('/dashboard/account-earnings' as any);
+            }
+          }}
         >
           <Ionicons name="chevron-back" size={24} color="black" />
         </TouchableOpacity>
