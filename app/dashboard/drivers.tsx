@@ -9,7 +9,8 @@ import {
   TextInput,
   FlatList,
   ActivityIndicator,
-  Alert
+  Alert,
+  Dimensions
 } from 'react-native';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -241,59 +242,63 @@ export default function DriversListScreen() {
           { transform: [{ translateX: sidebarAnim }] }
         ]}
       >
-        <View style={styles.sidebarHeader}>
-          <View style={styles.sidebarUserInfo}>
-            <View style={styles.sidebarAvatar}>
-              <Text style={styles.avatarText}>{user?.name?.charAt(0) || 'A'}</Text>
+        <View style={styles.sidebarContainer}>
+          <View style={styles.sidebarInner}>
+            <View style={styles.sidebarHeader}>
+              <View style={styles.sidebarUserInfo}>
+                <View style={styles.sidebarAvatar}>
+                  <Text style={styles.avatarText}>{user?.name?.charAt(0) || 'A'}</Text>
+                </View>
+                <View style={styles.sidebarUserDetails}>
+                  <Text style={styles.sidebarUserName}>{user?.name || 'Admin User'}</Text>
+                  <Text style={styles.sidebarUserRole}>{user?.role || 'Admin'}</Text>
+                </View>
+              </View>
+              <TouchableOpacity 
+                style={styles.closeSidebar}
+                onPress={() => setSidebarOpen(false)}
+              >
+                <Ionicons name="close" size={24} color="#000" />
+              </TouchableOpacity>
             </View>
-            <View style={styles.sidebarUserDetails}>
-              <Text style={styles.sidebarUserName}>{user?.name || 'Admin User'}</Text>
-              <Text style={styles.sidebarUserRole}>{user?.role || 'Admin'}</Text>
+            
+            <ScrollView style={styles.sidebarContent} showsVerticalScrollIndicator={false}>
+              {menuItems.map((item, index) => (
+                <TouchableOpacity 
+                  key={index} 
+                  style={[
+                    styles.sidebarMenuItem,
+                    index === 1 && styles.activeMenuItem
+                  ]}
+                  onPress={() => navigate(item.route)}
+                >
+                  <Ionicons 
+                    name={item.icon} 
+                    size={22} 
+                    color={index === 1 ? "#000" : "#666"} 
+                  />
+                  <Text 
+                    style={[
+                      styles.sidebarMenuItemText,
+                      index === 1 && styles.activeMenuItemText
+                    ]}
+                  >
+                    {item.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            
+            <View style={styles.sidebarFooter}>
+              <TouchableOpacity 
+                style={styles.logoutButton}
+                onPress={handleLogout}
+              >
+                <Ionicons name="log-out-outline" size={22} color="#FF3B30" />
+                <Text style={styles.logoutButtonText}>Logout</Text>
+              </TouchableOpacity>
             </View>
           </View>
-          <TouchableOpacity 
-            style={styles.closeSidebar}
-            onPress={() => setSidebarOpen(false)}
-          >
-            <Ionicons name="close" size={24} color="#000" />
-          </TouchableOpacity>
-        </View>
-        
-        <ScrollView style={styles.sidebarContent}>
-          {menuItems.map((item, index) => (
-            <TouchableOpacity 
-              key={index} 
-              style={[
-                styles.sidebarMenuItem,
-                index === 1 && styles.activeMenuItem
-              ]}
-              onPress={() => navigate(item.route)}
-            >
-              <Ionicons 
-                name={item.icon} 
-                size={22} 
-                color={index === 1 ? "#000" : "#666"} 
-              />
-              <Text 
-                style={[
-                  styles.sidebarMenuItemText,
-                  index === 1 && styles.activeMenuItemText
-                ]}
-              >
-                {item.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-        
-        <View style={styles.sidebarFooter}>
-          <TouchableOpacity 
-            style={styles.logoutButton}
-            onPress={handleLogout}
-          >
-            <Ionicons name="log-out-outline" size={22} color="#FF3B30" />
-            <Text style={styles.logoutButtonText}>Logout</Text>
-          </TouchableOpacity>
         </View>
       </Animated.View>
       
@@ -638,19 +643,28 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     bottom: 0,
+    height: Dimensions.get('window').height + 100,
     zIndex: 3,
     shadowColor: '#000',
     shadowOffset: { width: 2, height: 0 },
     shadowOpacity: 0.1,
     shadowRadius: 5,
     elevation: 10,
-    paddingTop: 20,
+    borderTopRightRadius: 20,
+    borderBottomRightRadius: 20,
+  },
+  sidebarContainer: {
+    flex: 1,
+  },
+  sidebarInner: {
+    flex: 1,
   },
   sidebarHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
+    paddingTop: 60,
     paddingBottom: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',

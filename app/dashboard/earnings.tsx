@@ -22,8 +22,7 @@ import { useToast } from '@/contexts/ToastContext';
 import { getEarningsSummary, getAllEarnings, deleteEarning } from '@/services/earning.service';
 import { generateEarningsPDF } from '@/services/pdf.service';
 
-const screenWidth = Dimensions.get('window').width - 40;
-const SIDEBAR_WIDTH = 270;
+const { width } = Dimensions.get('window');
 
 // Define data types
 type EarningType = {
@@ -59,8 +58,6 @@ export default function EarningsScreen() {
   const { logout, user } = useAuth();
   const toast = useToast();
   const [selectedPeriod, setSelectedPeriod] = useState('weekly');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [showAllEarnings, setShowAllEarnings] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
   
@@ -88,8 +85,43 @@ export default function EarningsScreen() {
     }
   }, [user, router]);
 
-  // Fetch earnings data
+  // Initial fetch
   useEffect(() => {
+    fetchEarningsData();
+  }, [user, selectedPeriod]);
+
+  // Format amount to display with currency
+  const formatAmount = (amount: number) => {
+    return `AED ${parseFloat(amount.toString()).toFixed(2)}`;
+  };
+  
+  // Format date 
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    // Check if date is today
+    if (date.toDateString() === today.toDateString()) {
+      return `Today, ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+    }
+    
+    // Check if date is yesterday
+    if (date.toDateString() === yesterday.toDateString()) {
+      return `Yesterday, ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+    }
+    
+    // Otherwise return formatted date
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+  
+  // Fetch earnings data function
     const fetchEarningsData = async () => {
       if (!user) return;
       
@@ -114,13 +146,6 @@ export default function EarningsScreen() {
         setIsLoading(false);
       }
     };
-    
-    fetchEarningsData();
-  }, [user, selectedPeriod]);
-
-  // Animation value for sidebar
-  const sidebarAnim = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
-  const overlayAnim = useRef(new Animated.Value(0)).current;
   
   // Prepare earnings data for chart
   const getChartData = () => {
@@ -161,106 +186,6 @@ export default function EarningsScreen() {
   // Get chart data
   const { data, labels } = getChartData();
   const maxValue = Math.max(...data, 1); // Ensure at least 1 to avoid division by zero
-  
-  // Animate sidebar when sidebarOpen changes
-  useEffect(() => {
-    if (sidebarOpen) {
-      Animated.parallel([
-        Animated.timing(sidebarAnim, {
-          toValue: 0,
-          duration: 300,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true
-        }),
-        Animated.timing(overlayAnim, {
-          toValue: 0.5,
-          duration: 300,
-          useNativeDriver: true
-        })
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.timing(sidebarAnim, {
-          toValue: -SIDEBAR_WIDTH,
-          duration: 300,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true
-        }),
-        Animated.timing(overlayAnim, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true
-        })
-      ]).start();
-    }
-  }, [sidebarOpen]);
-  
-  const toggleSidebar = () => {
-    setSidebarOpen(!sidebarOpen);
-  };
-
-  const handleLogout = async () => {
-    try {
-      await logout();
-      router.replace('/auth/login');
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
-  };
-
-  const handlePeriodChange = (period: string) => {
-    setSelectedPeriod(period.toLowerCase());
-  };
-
-  // Simplified sidebar menu items
-  type MenuItemType = {
-    icon: React.ComponentProps<typeof Ionicons>['name'];
-    label: string;
-    route: string;
-  };
-
-  const menuItems: MenuItemType[] = [
-    { icon: 'home-outline', label: 'Dashboard', route: '/dashboard/driver' },
-    { icon: 'cash-outline', label: 'Earnings', route: '/dashboard/earnings' },
-    { icon: 'list-outline', label: 'All Earnings', route: '/dashboard/all-earnings' },
-    { icon: 'wallet-outline', label: 'Account Earnings', route: '/dashboard/account-earnings' },
-  ];
-
-  const navigateToRoute = (route: string) => {
-    router.replace(route as any); // Using type assertion since we're sure these are valid routes
-    setSidebarOpen(false);
-  };
-
-  // Format amount to display with currency
-  const formatAmount = (amount: number) => {
-    return `AED ${parseFloat(amount.toString()).toFixed(2)}`;
-  };
-  
-  // Format date 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    
-    // Check if date is today
-    if (date.toDateString() === today.toDateString()) {
-      return `Today, ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
-    }
-    
-    // Check if date is yesterday
-    if (date.toDateString() === yesterday.toDateString()) {
-      return `Yesterday, ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
-    }
-    
-    // Otherwise return formatted date
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
 
   // Handle PDF download
   const handleDownloadStatement = async () => {
@@ -310,7 +235,7 @@ export default function EarningsScreen() {
         // Reset if not double clicked within 300ms
         clickCountRef.current = 0;
         // Handle single click here if needed
-      }, 300);
+      }, 300) as unknown as NodeJS.Timeout;
     } else if (clickCountRef.current === 2) {
       // Double click
       if (clickTimeoutRef.current) {
@@ -357,94 +282,6 @@ export default function EarningsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
-      
-      {/* Sidebar Overlay */}
-      {sidebarOpen && (
-        <Animated.View 
-          style={[
-            styles.overlay, 
-            { opacity: overlayAnim }
-          ]}
-          onTouchStart={() => setSidebarOpen(false)}
-        />
-      )}
-      
-      {/* Sidebar */}
-      <Animated.View 
-        style={[
-          styles.sidebar, 
-          { transform: [{ translateX: sidebarAnim }] }
-        ]}
-      >
-        <View style={styles.sidebarHeader}>
-          <View style={styles.sidebarUserInfo}>
-            <View style={styles.sidebarAvatar}>
-              <Text style={styles.avatarText}>{user?.name?.charAt(0) || 'D'}</Text>
-            </View>
-            <View style={styles.sidebarUserDetails}>
-              <Text style={styles.sidebarUserName}>{user?.name || 'Driver Name'}</Text>
-              <Text style={styles.sidebarUserRole}>{user?.role || 'Driver'}</Text>
-            </View>
-          </View>
-          <TouchableOpacity 
-            style={styles.closeSidebar}
-            onPress={() => setSidebarOpen(false)}
-          >
-            <Ionicons name="close" size={24} color="#000" />
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView style={styles.sidebarContent}>
-          {menuItems.map((item, index) => (
-            <TouchableOpacity 
-              key={index} 
-              style={[
-                styles.sidebarMenuItem,
-                (item.route === '/dashboard/driver' && pathname === '/dashboard/driver') || 
-                (item.route === '/dashboard/earnings' && pathname === '/dashboard/earnings') ||
-                (item.route === '/dashboard/all-earnings' && pathname === '/dashboard/all-earnings') ||
-                (item.route === '/dashboard/account-earnings' && pathname === '/dashboard/account-earnings') ? 
-                  styles.activeMenuItem : {}
-              ]}
-              onPress={() => navigateToRoute(item.route)}
-            >
-              <Ionicons 
-                name={item.icon} 
-                size={22} 
-                color={
-                  (item.route === '/dashboard/driver' && pathname === '/dashboard/driver') || 
-                  (item.route === '/dashboard/earnings' && pathname === '/dashboard/earnings') ||
-                  (item.route === '/dashboard/all-earnings' && pathname === '/dashboard/all-earnings') ||
-                  (item.route === '/dashboard/account-earnings' && pathname === '/dashboard/account-earnings') ? 
-                    "#000" : "#666"
-                } 
-              />
-              <Text 
-                style={[
-                  styles.sidebarMenuItemText,
-                  (item.route === '/dashboard/driver' && pathname === '/dashboard/driver') || 
-                  (item.route === '/dashboard/earnings' && pathname === '/dashboard/earnings') ||
-                  (item.route === '/dashboard/all-earnings' && pathname === '/dashboard/all-earnings') ||
-                  (item.route === '/dashboard/account-earnings' && pathname === '/dashboard/account-earnings') ? 
-                    styles.activeMenuItemText : {}
-                ]}
-              >
-                {item.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-        
-        <View style={styles.sidebarFooter}>
-          <TouchableOpacity 
-            style={styles.logoutButton}
-            onPress={handleLogout}
-          >
-            <Ionicons name="log-out-outline" size={22} color="#FF3B30" />
-            <Text style={styles.logoutButtonText}>Logout</Text>
-          </TouchableOpacity>
-        </View>
-      </Animated.View>
       
       <View style={styles.header}>
         <TouchableOpacity 
@@ -742,110 +579,6 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: 'red',
-  },
-  // Sidebar styles
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#000',
-    zIndex: 1,
-  },
-  sidebar: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: SIDEBAR_WIDTH,
-    height: '100%',
-    backgroundColor: '#fff',
-    zIndex: 2,
-    borderTopRightRadius: 20,
-    borderBottomRightRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 2, height: 0 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
-    bottom: 0,
-  },
-  sidebarHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 40,
-    paddingBottom: 25,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  sidebarUserInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  sidebarAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#000000',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  avatarText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  sidebarUserDetails: {
-    justifyContent: 'center',
-  },
-  sidebarUserName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  sidebarUserRole: {
-    fontSize: 12,
-    color: '#666',
-  },
-  closeSidebar: {
-    padding: 5,
-  },
-  sidebarContent: {
-    flex: 1,
-    paddingTop: 10,
-  },
-  sidebarMenuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 15,
-    paddingHorizontal: 20,
-    marginBottom: 5,
-  },
-  activeMenuItem: {
-    backgroundColor: '#f0f0f0',
-  },
-  sidebarMenuItemText: {
-    marginLeft: 15,
-    fontSize: 16,
-    color: '#666',
-  },
-  activeMenuItemText: {
-    color: '#000',
-    fontWeight: '500',
-  },
-  sidebarFooter: {
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-  },
-  logoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-  },
-  logoutButtonText: {
-    marginLeft: 15,
-    fontSize: 16,
-    color: '#FF3B30',
-    fontWeight: '500',
   },
   paymentMethodsSection: {
     marginBottom: 20,

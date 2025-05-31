@@ -212,45 +212,50 @@ export default function SettingsScreen() {
         
         {/* Settings Options */}
         <View style={styles.settingsContainer}>
-          {/* Notification Setting */}
-          <View style={styles.settingItem}>
-            <View style={styles.settingIcon}>
-              <Ionicons name="notifications-outline" size={22} color="#007AFF" />
-            </View>
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingTitle}>Email Notifications</Text>
-              <Text style={styles.settingDescription}>Receive email alerts and updates</Text>
-            </View>
-            <Switch
-              trackColor={{ false: "#e0e0e0", true: "#000000" }}
-              thumbColor={emailNotifications ? "#ffffff" : "#f4f3f4"}
-              ios_backgroundColor="#e0e0e0"
-              onValueChange={toggleEmailNotifications}
-              value={emailNotifications}
-            />
-          </View>
-          
-          <View style={styles.divider} />
-          
-          {/* Dark Mode Setting */}
-          <View style={styles.settingItem}>
-            <View style={styles.settingIcon}>
-              <Ionicons name="moon-outline" size={22} color="#6C3CE9" />
-            </View>
-            <View style={styles.settingInfo}>
-              <Text style={styles.settingTitle}>Dark Mode</Text>
-              <Text style={styles.settingDescription}>Switch between light and dark theme</Text>
-            </View>
-            <Switch
-              trackColor={{ false: "#e0e0e0", true: "#000000" }}
-              thumbColor={darkMode ? "#ffffff" : "#f4f3f4"}
-              ios_backgroundColor="#e0e0e0"
-              onValueChange={toggleDarkMode}
-              value={darkMode}
-            />
-          </View>
-          
-          <View style={styles.divider} />
+          {/* Only show toggles for non-admin users */}
+          {user?.role !== 'Admin' && (
+            <>
+              {/* Notification Setting */}
+              <View style={styles.settingItem}>
+                <View style={styles.settingIcon}>
+                  <Ionicons name="notifications-outline" size={22} color="#007AFF" />
+                </View>
+                <View style={styles.settingInfo}>
+                  <Text style={styles.settingTitle}>Email Notifications</Text>
+                  <Text style={styles.settingDescription}>Receive email alerts and updates</Text>
+                </View>
+                <Switch
+                  trackColor={{ false: "#e0e0e0", true: "#000000" }}
+                  thumbColor={emailNotifications ? "#ffffff" : "#f4f3f4"}
+                  ios_backgroundColor="#e0e0e0"
+                  onValueChange={toggleEmailNotifications}
+                  value={emailNotifications}
+                />
+              </View>
+              
+              <View style={styles.divider} />
+              
+              {/* Dark Mode Setting */}
+              <View style={styles.settingItem}>
+                <View style={styles.settingIcon}>
+                  <Ionicons name="moon-outline" size={22} color="#6C3CE9" />
+                </View>
+                <View style={styles.settingInfo}>
+                  <Text style={styles.settingTitle}>Dark Mode</Text>
+                  <Text style={styles.settingDescription}>Switch between light and dark theme</Text>
+                </View>
+                <Switch
+                  trackColor={{ false: "#e0e0e0", true: "#000000" }}
+                  thumbColor={darkMode ? "#ffffff" : "#f4f3f4"}
+                  ios_backgroundColor="#e0e0e0"
+                  onValueChange={toggleDarkMode}
+                  value={darkMode}
+                />
+              </View>
+              
+              <View style={styles.divider} />
+            </>
+          )}
           
           {/* Password Change Option */}
           <TouchableOpacity 
@@ -359,7 +364,7 @@ export default function SettingsScreen() {
         </View>
         
         <View style={styles.footer}>
-          <Text style={styles.footerText}>FleetX © 2023</Text>
+          <Text style={styles.footerText}>FleetX © 2025</Text>
         </View>
       </ScrollView>
     </SafeAreaView>

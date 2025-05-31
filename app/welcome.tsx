@@ -17,7 +17,9 @@ export default function WelcomeScreen() {
     
     try {
       // Mark welcome screen as seen
+      console.log('Marking welcome screen as seen for login...');
       await setWelcomeScreenAsSeen();
+      console.log('Welcome screen marked as seen, navigating to login...');
       router.push('/auth/login');
     } catch (error) {
       console.error('Error navigating to login:', error);
@@ -32,7 +34,9 @@ export default function WelcomeScreen() {
     
     try {
       // Mark welcome screen as seen
+      console.log('Marking welcome screen as seen for signup...');
       await setWelcomeScreenAsSeen();
+      console.log('Welcome screen marked as seen, navigating to signup...');
       router.push('/auth/signup');
     } catch (error) {
       console.error('Error navigating to signup:', error);

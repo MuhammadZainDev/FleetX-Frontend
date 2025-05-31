@@ -145,17 +145,26 @@ export default function DriverDashboard() {
     const fetchDriverData = async () => {
       try {
         setIsLoading(true);
-        const [earningSummary, expenseSummary, autoExpenseSummary] = await Promise.all([
-          getEarningsSummary(user?.id, selectedPeriod),
-          getExpensesSummary(user?.id, selectedPeriod),
-          getAutoExpensesSummary(user?.id, selectedPeriod)
+        
+        // Fetch all data without period restriction for cards
+        const [allEarningsResp, allExpensesResp, allAutoExpensesResp] = await Promise.all([
+          getAllEarnings({ driverId: user?.id }),
+          getAllExpenses({ driverId: user?.id }),
+          getAutoExpensesSummary(user?.id, 'all') // Use 'all' to get all data
         ]);
         
-        setTotalEarnings(earningSummary.totalEarnings || 0);
-        setTotalExpenses(expenseSummary.totalExpenses || 0);
-        setTotalAutoExpenses(autoExpenseSummary.totalAutoExpenses || 0);
+        // Calculate totals from all data
+        let allEarnings = Array.isArray(allEarningsResp) ? allEarningsResp : (allEarningsResp.earnings || []);
+        let allExpenses = Array.isArray(allExpensesResp) ? allExpensesResp : (allExpensesResp.expenses || []);
+        
+        const totalEarningsAmount = allEarnings.reduce((sum: number, e: any) => sum + parseFloat(e.amount), 0);
+        const totalExpensesAmount = allExpenses.reduce((sum: number, e: any) => sum + parseFloat(e.amount), 0);
+        
+        setTotalEarnings(totalEarningsAmount);
+        setTotalExpenses(totalExpensesAmount);
+        setTotalAutoExpenses(allAutoExpensesResp.totalAutoExpenses || 0);
 
-        // Calculate monthly earnings and salary
+        // Calculate monthly earnings and salary (keep this for the income card)
         const now = new Date();
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
         const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -176,7 +185,7 @@ export default function DriverDashboard() {
     if (user?.id) {
       fetchDriverData();
     }
-  }, [user, selectedPeriod]);
+  }, [user]); // Remove selectedPeriod dependency
 
   // Fetch driver's vehicles
   useEffect(() => {
@@ -476,62 +485,64 @@ export default function DriverDashboard() {
           { transform: [{ translateX: sidebarAnim }] }
         ]}
       >
-        <SafeAreaView style={{flex: 1, height: '100%'}}>
-          <View style={styles.sidebarHeader}>
-            <View style={styles.sidebarUserInfo}>
-              <View style={styles.sidebarAvatar}>
-                <Text style={styles.avatarText}>{userData?.name?.charAt(0)}</Text>
+        <View style={styles.sidebarContainer}>
+          <View style={styles.sidebarInner}>
+            <View style={styles.sidebarHeader}>
+              <View style={styles.sidebarUserInfo}>
+                <View style={styles.sidebarAvatar}>
+                  <Text style={styles.avatarText}>{userData?.name?.charAt(0)}</Text>
+                </View>
+                <View style={styles.sidebarUserDetails}>
+                  <Text style={styles.sidebarUserName}>{userData?.name}</Text>
+                  <Text style={styles.sidebarUserRole}>{userData?.role}</Text>
+                </View>
               </View>
-              <View style={styles.sidebarUserDetails}>
-                <Text style={styles.sidebarUserName}>{userData?.name}</Text>
-                <Text style={styles.sidebarUserRole}>{userData?.role}</Text>
-              </View>
-            </View>
-            <TouchableOpacity 
-              style={styles.closeSidebar}
-              onPress={() => setSidebarOpen(false)}
-            >
-              <Ionicons name="close" size={24} color="#000" />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView style={styles.sidebarContent}>
-            {menuItems.map((item, index) => (
               <TouchableOpacity 
-                key={index} 
-                style={[
-                  styles.sidebarMenuItem,
-                  pathname === item.route ? styles.activeMenuItem : {}
-                ]}
-                onPress={() => navigateToRoute(item.route)}
+                style={styles.closeSidebar}
+                onPress={() => setSidebarOpen(false)}
               >
-                <Ionicons 
-                  name={item.icon} 
-                  size={22} 
-                  color={pathname === item.route ? "#000" : "#666"} 
-                />
-                <Text 
-                  style={[
-                    styles.sidebarMenuItemText,
-                    pathname === item.route ? styles.activeMenuItemText : {}
-                  ]}
-                >
-                  {item.label}
-                </Text>
+                <Ionicons name="close" size={24} color="#000" />
               </TouchableOpacity>
-            ))}
-          </ScrollView>
-          
-          <View style={styles.sidebarFooter}>
-            <TouchableOpacity 
-              style={styles.logoutButton}
-              onPress={handleLogout}
-            >
-              <Ionicons name="log-out-outline" size={22} color="#FF3B30" />
-              <Text style={styles.logoutButtonText}>Logout</Text>
-            </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.sidebarContent}>
+              {menuItems.map((item, index) => (
+                <TouchableOpacity 
+                  key={index} 
+                  style={[
+                    styles.sidebarMenuItem,
+                    pathname === item.route ? styles.activeMenuItem : {}
+                  ]}
+                  onPress={() => navigateToRoute(item.route)}
+                >
+                  <Ionicons 
+                    name={item.icon} 
+                    size={22} 
+                    color={pathname === item.route ? "#000" : "#666"} 
+                  />
+                  <Text 
+                    style={[
+                      styles.sidebarMenuItemText,
+                      pathname === item.route ? styles.activeMenuItemText : {}
+                    ]}
+                  >
+                    {item.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            
+            <View style={styles.sidebarFooter}>
+              <TouchableOpacity 
+                style={styles.logoutButton}
+                onPress={handleLogout}
+              >
+                <Ionicons name="log-out-outline" size={22} color="#FF3B30" />
+                <Text style={styles.logoutButtonText}>Logout</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </SafeAreaView>
+        </View>
       </Animated.View>
       
       <View style={styles.header}>
@@ -883,11 +894,11 @@ export default function DriverDashboard() {
                                   {formatTransactionDate(expense.date)}
                                 </Text>
         </View>
-                            </View>
-                            <Text style={[styles.transactionAmount, styles.expenseAmount]}>
-                              -AED {typeof expense.amount === 'string' ? parseFloat(expense.amount).toFixed(2) : Number(expense.amount).toFixed(2)}
-                            </Text>
                           </View>
+                          <Text style={[styles.transactionAmount, styles.expenseAmount]}>
+                            -AED {typeof expense.amount === 'string' ? parseFloat(expense.amount).toFixed(2) : Number(expense.amount).toFixed(2)}
+                          </Text>
+                        </View>
                           {/* Add divider if not the last item */}
                           {index < todayExpenses.length - 1 && <View style={styles.divider} />}
                         </React.Fragment>
@@ -943,7 +954,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     width: SIDEBAR_WIDTH,
-    height: '100%',
+    height: screenHeight + 100,
     backgroundColor: '#fff',
     zIndex: 2,
     borderTopRightRadius: 20,
@@ -954,12 +965,18 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 5,
   },
+  sidebarContainer: {
+    flex: 1,
+  },
+  sidebarInner: {
+    flex: 1,
+  },
   sidebarHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 40,
+    paddingTop: 60,
     paddingBottom: 25,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',

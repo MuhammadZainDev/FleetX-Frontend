@@ -216,7 +216,13 @@ export default function AddEarningScreen() {
     
     if (formData.date) {
       try {
-        const date = new Date(formData.date);
+        // Parse the date string properly for Asia/Karachi timezone
+        const dateStr = formData.date;
+        const [year, month, day] = dateStr.split('-').map(Number);
+        
+        // Create date object with proper local date components
+        const date = new Date(year, month - 1, day);
+        
         // Check if date is valid
         if (!isNaN(date.getTime())) {
           setSelectedYear(date.getFullYear());

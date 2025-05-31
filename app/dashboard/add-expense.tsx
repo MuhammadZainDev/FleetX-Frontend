@@ -18,6 +18,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { createExpense } from '@/services/expense.service';
+import { getAllExpenses } from '@/services/expense.service';
+import { generateExpensesPDF } from '@/services/pdf.service';
 
 export default function AddExpenseScreen() {
   const { token, user } = useAuth();
@@ -25,6 +27,7 @@ export default function AddExpenseScreen() {
   const [loading, setLoading] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [isAmountValid, setIsAmountValid] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [formData, setFormData] = useState({
     amount: '',
     category: 'Other', // Default category
@@ -191,6 +194,41 @@ export default function AddExpenseScreen() {
     }
   };
   
+  // Handle PDF download
+  const handleDownloadStatement = async () => {
+    try {
+      setIsDownloading(true);
+      
+      if (!user) {
+        toast.showToast('error', 'Error', 'User data is not available');
+        return;
+      }
+      
+      // Fetch all expenses for the current user
+      const fetchAllData = async () => {
+        try {
+          const filters = { driverId: user.id };
+          const allExpenses = await getAllExpenses(filters);
+          return allExpenses;
+        } catch (error) {
+          console.error('Error fetching all expenses:', error);
+          throw error;
+        }
+      };
+      
+      const expensesData = await fetchAllData();
+      
+      await generateExpensesPDF(expensesData, user, 'fleetx-expenses-statement.pdf');
+      
+      toast.showToast('success', 'Success', 'Expenses statement has been generated and is ready to share.');
+    } catch (error) {
+      console.error('Error downloading statement:', error);
+      toast.showToast('error', 'Error', 'Failed to generate expenses statement. Please try again.');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+  
   // Format date for display
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -222,7 +260,13 @@ export default function AddExpenseScreen() {
     
     if (formData.date) {
       try {
-        const date = new Date(formData.date);
+        // Parse the date string properly for Asia/Karachi timezone
+        const dateStr = formData.date;
+        const [year, month, day] = dateStr.split('-').map(Number);
+        
+        // Create date object with proper local date components
+        const date = new Date(year, month - 1, day);
+        
         // Check if date is valid
         if (!isNaN(date.getTime())) {
           setSelectedYear(date.getFullYear());
@@ -510,6 +554,28 @@ export default function AddExpenseScreen() {
             </>
           )}
         </TouchableOpacity>
+        
+        {/* Download Statement Button */}
+        <TouchableOpacity 
+          style={[
+            styles.downloadButton,
+            isDownloading && styles.disabledDownloadButton
+          ]}
+          onPress={handleDownloadStatement}
+          disabled={isDownloading}
+        >
+          {isDownloading ? (
+            <>
+              <ActivityIndicator color="#000" size="small" style={{marginRight: 8}} />
+              <Text style={styles.downloadButtonText}>Please wait...</Text>
+            </>
+          ) : (
+            <>
+              <Ionicons name="download-outline" size={20} color="#000" />
+              <Text style={styles.downloadButtonText}>Download Expenses Statement</Text>
+            </>
+          )}
+        </TouchableOpacity>
       </ScrollView>
       
       {/* Date Picker Modal */}
@@ -677,11 +743,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     backgroundColor: '#fff',
     height: 56,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
   },
   inputIcon: {
     marginRight: 10,
@@ -724,11 +785,6 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     marginHorizontal: 4,
     borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
   },
   activeCategoryButton: {
     backgroundColor: '#000',
@@ -862,5 +918,27 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  
+  // Download Section Styles
+  downloadButton: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#000',
+    borderRadius: 12,
+    paddingVertical: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+  },
+  disabledDownloadButton: {
+    opacity: 0.7,
+  },
+  downloadButtonText: {
+    color: '#000',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
   },
 }); 

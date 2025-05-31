@@ -18,6 +18,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { createAutoExpense } from '@/services/autoExpense.service';
+import { getAllAutoExpenses } from '@/services/autoExpense.service';
+import { generateAutoExpensesPDF } from '@/services/pdf.service';
 
 export default function AddAutoExpenseScreen() {
   const { token, user } = useAuth();
@@ -25,6 +27,7 @@ export default function AddAutoExpenseScreen() {
   const [loading, setLoading] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [isAmountValid, setIsAmountValid] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [formData, setFormData] = useState({
     amount: '',
     category: 'Other', // Default category
@@ -192,6 +195,41 @@ export default function AddAutoExpenseScreen() {
     }
   };
   
+  // Handle PDF download
+  const handleDownloadStatement = async () => {
+    try {
+      setIsDownloading(true);
+      
+      if (!user) {
+        toast.showToast('error', 'Error', 'User data is not available');
+        return;
+      }
+      
+      // Fetch all auto expenses for the current user
+      const fetchAllData = async () => {
+        try {
+          const filters = { driverId: user.id };
+          const allAutoExpenses = await getAllAutoExpenses(filters, token as any);
+          return allAutoExpenses;
+        } catch (error) {
+          console.error('Error fetching all auto expenses:', error);
+          throw error;
+        }
+      };
+      
+      const autoExpensesData = await fetchAllData();
+      
+      await generateAutoExpensesPDF(autoExpensesData, user, 'fleetx-auto-expenses-statement.pdf');
+      
+      toast.showToast('success', 'Success', 'Auto expenses statement has been generated and is ready to share.');
+    } catch (error) {
+      console.error('Error downloading statement:', error);
+      toast.showToast('error', 'Error', 'Failed to generate auto expenses statement. Please try again.');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+  
   // Format date for display
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -215,23 +253,56 @@ export default function AddAutoExpenseScreen() {
     }));
   };
   
-  // Show date picker modal
+  // Open the date picker modal and set initial values
   const openDatePicker = () => {
-    // Initialize picker with current date values
-    const currentDate = new Date(formData.date);
-    setSelectedYear(currentDate.getFullYear());
-    setSelectedMonth(currentDate.getMonth());
-    setSelectedDay(currentDate.getDate());
+    const today = new Date();
+    
+    if (formData.date) {
+      try {
+        // Parse the date string properly for Asia/Karachi timezone
+        const dateStr = formData.date;
+        const [year, month, day] = dateStr.split('-').map(Number);
+        
+        // Create date object with proper local date components
+        const date = new Date(year, month - 1, day);
+        
+        // Check if date is valid
+        if (!isNaN(date.getTime())) {
+          setSelectedYear(date.getFullYear());
+          setSelectedMonth(date.getMonth());
+          setSelectedDay(date.getDate());
+        } else {
+          // If date is invalid, use current date
+          setSelectedYear(today.getFullYear());
+          setSelectedMonth(today.getMonth());
+          setSelectedDay(today.getDate());
+        }
+      } catch (e) {
+        // If there's any error parsing the date, use current date
+        setSelectedYear(today.getFullYear());
+        setSelectedMonth(today.getMonth());
+        setSelectedDay(today.getDate());
+      }
+    } else {
+      // If no date is set, use current date
+      setSelectedYear(today.getFullYear());
+      setSelectedMonth(today.getMonth());
+      setSelectedDay(today.getDate());
+    }
+    
     setShowDatePicker(true);
   };
   
   // Confirm date picker selection
   const confirmDate = () => {
-    // Create new date from picker values
-    const newDate = new Date(selectedYear, selectedMonth, selectedDay);
+    // Create proper date string to avoid timezone issues
+    const year = selectedYear;
+    const month = String(selectedMonth + 1).padStart(2, '0');
+    const day = String(selectedDay).padStart(2, '0');
+    const formattedDate = `${year}-${month}-${day}`;
     
-    // Format date for form data (YYYY-MM-DD)
-    const formattedDate = newDate.toISOString().split('T')[0];
+    console.log('Selected date in picker:', { year, month: selectedMonth + 1, day: selectedDay });
+    console.log('Formatted date from picker:', formattedDate);
     
     // Update form data
     setFormData(prev => ({
@@ -276,17 +347,25 @@ export default function AddAutoExpenseScreen() {
         <Text style={styles.title}>Add Auto Expense</Text>
       </View>
       
-      <ScrollView style={styles.content}>
+      <ScrollView 
+        style={styles.content}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Amount Field */}
-        <View style={styles.fieldContainer}>
+        <View style={styles.formGroup}>
           <Text style={styles.label}>Amount (AED)</Text>
-          <TextInput
-            style={styles.input}
-            keyboardType="numeric"
-            placeholder="Enter amount"
-            value={formData.amount}
-            onChangeText={value => handleInputChange('amount', value)}
-          />
+          <View style={styles.inputContainer}>
+            <Ionicons name="cash-outline" size={20} color="#666" style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Enter amount"
+              value={formData.amount}
+              onChangeText={(value) => handleInputChange('amount', value)}
+              keyboardType="decimal-pad"
+              placeholderTextColor="#999"
+            />
+          </View>
           {formData.amount.length > 0 && !isAmountValid && (
             <Text style={styles.errorText}>
               Please enter a valid amount (up to 5 digits)
@@ -295,53 +374,152 @@ export default function AddAutoExpenseScreen() {
         </View>
         
         {/* Category Selector */}
-        <View style={styles.fieldContainer}>
+        <View style={styles.formGroup}>
           <Text style={styles.label}>Category</Text>
           <View style={styles.categoryContainer}>
-            {['Petrol', 'Car Accident', 'Maintenance', 'Insurance', 'Other'].map((category) => (
+            <View style={styles.categoryRow}>
+              {[
+                { type: 'Petrol', icon: 'car-outline' },
+                { type: 'Car Accident', icon: 'alert-circle-outline' },
+              ].map(({ type, icon }) => (
+                <TouchableOpacity
+                  key={type}
+                  style={[
+                    styles.categoryButton,
+                    formData.category === type && styles.activeCategoryButton
+                  ]}
+                  onPress={() => handleInputChange('category', type)}
+                >
+                  <Ionicons 
+                    name={icon as any} 
+                    size={20} 
+                    color={formData.category === type ? "#fff" : "#666"} 
+                    style={styles.categoryIcon}
+                  />
+                  <Text 
+                    style={[
+                      styles.categoryText,
+                      formData.category === type && styles.activeCategoryText
+                    ]}
+                  >
+                    {type}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={styles.categoryRow}>
+              {[
+                { type: 'Maintenance', icon: 'construct-outline' },
+                { type: 'Insurance', icon: 'shield-outline' },
+              ].map(({ type, icon }) => (
+                <TouchableOpacity
+                  key={type}
+                  style={[
+                    styles.categoryButton,
+                    formData.category === type && styles.activeCategoryButton
+                  ]}
+                  onPress={() => handleInputChange('category', type)}
+                >
+                  <Ionicons 
+                    name={icon as any} 
+                    size={20} 
+                    color={formData.category === type ? "#fff" : "#666"} 
+                    style={styles.categoryIcon}
+                  />
+                  <Text 
+                    style={[
+                      styles.categoryText,
+                      formData.category === type && styles.activeCategoryText
+                    ]}
+                  >
+                    {type}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={styles.categoryRow}>
               <TouchableOpacity
-                key={category}
                 style={[
                   styles.categoryButton,
-                  formData.category === category && styles.selectedCategoryButton
+                  formData.category === 'Other' && styles.activeCategoryButton
                 ]}
-                onPress={() => handleInputChange('category', category)}
+                onPress={() => handleInputChange('category', 'Other')}
               >
-                <Text style={[
-                  styles.categoryText,
-                  formData.category === category && styles.selectedCategoryText
-                ]}>
-                  {category}
+                <Ionicons 
+                  name="wallet-outline" 
+                  size={20} 
+                  color={formData.category === 'Other' ? "#fff" : "#666"} 
+                  style={styles.categoryIcon}
+                />
+                <Text 
+                  style={[
+                    styles.categoryText,
+                    formData.category === 'Other' && styles.activeCategoryText
+                  ]}
+                >
+                  Other
                 </Text>
               </TouchableOpacity>
-            ))}
+              <View style={styles.emptyButton}></View>
+            </View>
           </View>
         </View>
         
+        {/* Driver ID (Admin only) */}
+        {user?.role === 'Admin' && (
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Driver ID</Text>
+            <View style={styles.inputContainer}>
+              <Ionicons name="person-outline" size={20} color="#666" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Enter driver ID"
+                value={formData.driverId}
+                onChangeText={(value) => handleInputChange('driverId', value)}
+                placeholderTextColor="#999"
+              />
+            </View>
+            <Text style={styles.infoText}>
+              Please enter a valid driver ID. This field is required.
+            </Text>
+          </View>
+        )}
+        
         {/* Date Field */}
-        <View style={styles.fieldContainer}>
+        <View style={styles.formGroup}>
           <Text style={styles.label}>Date</Text>
           <TouchableOpacity 
-            style={styles.dateSelector}
+            style={styles.inputContainer}
             onPress={openDatePicker}
           >
-            <Text style={styles.dateText}>{formatDate(formData.date)}</Text>
-            <Ionicons name="calendar-outline" size={24} color="#666" />
+            <Ionicons name="calendar-outline" size={20} color="#666" style={styles.inputIcon} />
+            <Text style={[styles.input, !formData.date && styles.placeholderText]}>
+              {formData.date ? formatDate(formData.date) : 'Select date'}
+            </Text>
+            <Ionicons name="chevron-down" size={16} color="#666" style={styles.dateChevron} />
           </TouchableOpacity>
         </View>
         
         {/* Note Field */}
-        <View style={styles.fieldContainer}>
+        <View style={styles.formGroup}>
           <Text style={styles.label}>Note</Text>
-          <TextInput
-            style={[styles.input, styles.multilineInput]}
-            placeholder="Enter note or description"
-            value={formData.note}
-            onChangeText={value => handleInputChange('note', value)}
-            multiline
-            numberOfLines={3}
-            textAlignVertical="top"
-          />
+          <View style={[styles.inputContainer, styles.textAreaContainer]}>
+            <Ionicons 
+              name="document-text-outline" 
+              size={20} 
+              color="#666" 
+              style={[styles.inputIcon, {alignSelf: 'flex-start', marginTop: 12}]} 
+            />
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              placeholder="Add a note about this auto expense"
+              multiline
+              numberOfLines={4}
+              value={formData.note}
+              onChangeText={(value) => handleInputChange('note', value)}
+              placeholderTextColor="#999"
+            />
+          </View>
         </View>
         
         {/* Submit Button */}
@@ -354,9 +532,37 @@ export default function AddAutoExpenseScreen() {
           disabled={!isAmountValid || loading}
         >
           {loading ? (
-            <ActivityIndicator size="small" color="#ffffff" />
+            <>
+              <ActivityIndicator color="#fff" size="small" style={{marginRight: 8}} />
+              <Text style={styles.submitButtonText}>Please wait...</Text>
+            </>
           ) : (
-            <Text style={styles.submitButtonText}>Submit</Text>
+            <>
+              <Ionicons name="add-circle-outline" size={20} color="#fff" style={{marginRight: 8}} />
+              <Text style={styles.submitButtonText}>Create Auto Expense Record</Text>
+            </>
+          )}
+        </TouchableOpacity>
+        
+        {/* Download Statement Button */}
+        <TouchableOpacity 
+          style={[
+            styles.downloadButton,
+            isDownloading && styles.disabledDownloadButton
+          ]}
+          onPress={handleDownloadStatement}
+          disabled={isDownloading}
+        >
+          {isDownloading ? (
+            <>
+              <ActivityIndicator color="#000" size="small" style={{marginRight: 8}} />
+              <Text style={styles.downloadButtonText}>Please wait...</Text>
+            </>
+          ) : (
+            <>
+              <Ionicons name="download-outline" size={20} color="#000" />
+              <Text style={styles.downloadButtonText}>Download Auto Expenses Statement</Text>
+            </>
           )}
         </TouchableOpacity>
       </ScrollView>
@@ -495,7 +701,10 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 20,
   },
-  fieldContainer: {
+  contentContainer: {
+    paddingBottom: 20,
+  },
+  formGroup: {
     marginBottom: 20,
   },
   label: {
@@ -504,17 +713,33 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     color: '#333',
   },
-  input: {
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    backgroundColor: '#f9f9f9',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#fff',
+    height: 56,
   },
-  multilineInput: {
-    height: 100,
+  inputIcon: {
+    marginRight: 10,
+  },
+  input: {
+    flex: 1,
+    fontSize: 16,
+    color: '#333',
+    paddingVertical: 12,
+  },
+  textAreaContainer: {
+    height: 120,
+    alignItems: 'flex-start',
+  },
+  textArea: {
     textAlignVertical: 'top',
+    height: 100,
+    paddingTop: 12,
   },
   errorText: {
     color: '#FF3B30',
@@ -522,56 +747,64 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   categoryContainer: {
+    marginBottom: 10,
+  },
+  categoryRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: 8,
+    justifyContent: 'space-between',
+    marginBottom: 10,
   },
   categoryButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#f0f0f0',
-    marginRight: 10,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#ddd',
+    paddingVertical: 15,
+    marginHorizontal: 4,
+    borderRadius: 12,
   },
-  selectedCategoryButton: {
-    backgroundColor: '#000000',
-    borderColor: '#000000',
+  activeCategoryButton: {
+    backgroundColor: '#000',
   },
   categoryText: {
     fontSize: 14,
-    color: '#333',
-  },
-  selectedCategoryText: {
-    color: '#fff',
+    color: '#666',
     fontWeight: '500',
   },
-  dateSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    backgroundColor: '#f9f9f9',
+  activeCategoryText: {
+    color: '#fff',
   },
-  dateText: {
-    fontSize: 16,
-    color: '#333',
+  categoryIcon: {
+    marginRight: 8,
+  },
+  emptyButton: {
+    flex: 1,
+    marginHorizontal: 4,
+  },
+  infoText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+    marginLeft: 4,
+  },
+  dateChevron: {
+    marginLeft: 8,
+  },
+  placeholderText: {
+    color: '#999',
   },
   submitButton: {
-    backgroundColor: '#000000',
-    borderRadius: 8,
-    padding: 16,
+    backgroundColor: '#000',
+    borderRadius: 12,
+    paddingVertical: 16,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     marginTop: 20,
-    marginBottom: 40,
   },
   disabledButton: {
-    backgroundColor: '#999',
+    opacity: 0.7,
   },
   submitButtonText: {
     color: '#fff',
@@ -581,29 +814,32 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   modalContent: {
     backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    maxHeight: '80%',
+    borderRadius: 20,
+    width: '90%',
+    maxWidth: 400,
+    paddingVertical: 20,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    paddingHorizontal: 20,
+    marginBottom: 15,
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
+    color: '#000',
   },
   pickerContainer: {
     flexDirection: 'row',
+    paddingHorizontal: 10,
     justifyContent: 'space-between',
-    marginBottom: 20,
   },
   picker: {
     flex: 1,
@@ -611,29 +847,55 @@ const styles = StyleSheet.create({
     marginHorizontal: 5,
   },
   pickerItem: {
-    padding: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 5,
     alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 10,
+    marginVertical: 2,
   },
   selectedPickerItem: {
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
+    backgroundColor: '#000',
   },
   pickerText: {
     fontSize: 16,
+    color: '#333',
   },
   selectedPickerText: {
-    fontWeight: 'bold',
-    color: '#000',
+    color: '#FFF',
+    fontWeight: '600',
   },
   confirmButton: {
-    backgroundColor: '#000000',
-    borderRadius: 8,
-    padding: 16,
+    backgroundColor: '#000',
+    marginHorizontal: 20,
+    marginTop: 20,
+    paddingVertical: 15,
+    borderRadius: 12,
     alignItems: 'center',
   },
   confirmButtonText: {
-    color: '#fff',
+    color: '#FFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  downloadButton: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#000',
+    borderRadius: 12,
+    paddingVertical: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+  },
+  disabledDownloadButton: {
+    opacity: 0.7,
+  },
+  downloadButtonText: {
+    color: '#000',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
   },
 }); 

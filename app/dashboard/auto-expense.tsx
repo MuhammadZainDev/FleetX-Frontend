@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   StyleSheet, 
   View, 
@@ -7,14 +7,16 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  FlatList
+  FlatList,
+  Modal
 } from 'react-native';
 import { router, useRouter, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
-import { getAllAutoExpenses } from '@/services/autoExpense.service';
+import { useToast } from '@/contexts/ToastContext';
+import { getAllAutoExpenses, deleteAutoExpense } from '@/services/autoExpense.service';
 
 // Define the category type
 type AutoExpenseCategory = 'Petrol' | 'Car Accident' | 'Maintenance' | 'Insurance' | 'Other';
@@ -35,12 +37,19 @@ type AutoExpenseType = {
 
 export default function AutoExpenseScreen() {
   const { user, token } = useAuth();
+  const toast = useToast();
   const [autoExpenses, setAutoExpenses] = useState<AutoExpenseType[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<AutoExpenseCategory | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [selectedExpense, setSelectedExpense] = useState<AutoExpenseType | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
+  
+  // Double click detection
+  const lastTapRef = useRef<{ id: string; time: number } | null>(null);
   
   // Fetch auto expenses data on component mount
   useEffect(() => {
@@ -175,6 +184,60 @@ export default function AutoExpenseScreen() {
     router.push('/dashboard/add-auto-expense');
   };
   
+  // Handle auto expense item press for double-click detection
+  const handleExpensePress = (expense: AutoExpenseType) => {
+    const now = Date.now();
+    
+    // Check if this is a double tap (within 300ms of the last tap on the same item)
+    if (
+      lastTapRef.current && 
+      lastTapRef.current.id === expense.id && 
+      now - lastTapRef.current.time < 300
+    ) {
+      // Double-tap detected - show delete confirmation
+      setSelectedExpense(expense);
+      setShowDeleteModal(true);
+      lastTapRef.current = null;
+    } else {
+      // First tap - record it
+      lastTapRef.current = { id: expense.id, time: now };
+    }
+  };
+  
+  // Handle auto expense deletion
+  const handleDeleteExpense = async () => {
+    if (!selectedExpense) return;
+    
+    setIsDeleting(true);
+    
+    try {
+      await deleteAutoExpense(selectedExpense.id, token as any);
+      
+      // Update the local state to remove the deleted expense
+      setAutoExpenses(prevExpenses => 
+        prevExpenses.filter(expense => expense.id !== selectedExpense.id)
+      );
+      
+      // Show success toast message
+      toast.showToast('success', 'Success', 'Auto expense deleted successfully');
+    } catch (error) {
+      console.error('Error deleting auto expense:', error);
+      
+      // Extract the error message more carefully
+      let errorMessage = 'An unknown error occurred';
+      if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      // Show error toast message
+      toast.showToast('error', 'Error', `Failed to delete auto expense: ${errorMessage}`);
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteModal(false);
+      setSelectedExpense(null);
+    }
+  };
+  
   const categories: AutoExpenseCategory[] = ['Petrol', 'Car Accident', 'Maintenance', 'Insurance', 'Other'];
   
   return (
@@ -233,50 +296,44 @@ export default function AutoExpenseScreen() {
             />
           }
         >
-          {/* Category Filter Cards */}
-          <View style={styles.categorySection}>
-            <Text style={styles.sectionTitle}>Expense Categories</Text>
+          {/* Category Filter Section */}
+          <View style={styles.filterSection}>
+            <Text style={styles.filterTitle}>Filter by auto expense category:</Text>
             <ScrollView 
               horizontal 
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.categoryContainer}
+              contentContainerStyle={styles.filterContainer}
             >
               <TouchableOpacity
                 style={[
-                  styles.categoryCard,
-                  selectedCategory === null && styles.selectedCategoryCard
+                  styles.filterButton,
+                  selectedCategory === null && styles.selectedFilterButton
                 ]}
                 onPress={() => filterByCategory(null)}
               >
-                <View style={styles.categoryIconContainer}>
-                  <Ionicons name="apps-outline" size={22} color={selectedCategory === null ? "#fff" : "#000"} />
-                </View>
                 <Text style={[
-                  styles.categoryTypeText,
-                  selectedCategory === null && styles.selectedCategoryText
-                ]}>All</Text>
+                  styles.filterText,
+                  selectedCategory === null && styles.selectedFilterText
+                ]}>
+                  All
+                </Text>
               </TouchableOpacity>
               
               {categories.map((category) => (
                 <TouchableOpacity
                   key={category}
                   style={[
-                    styles.categoryCard,
-                    selectedCategory === category && styles.selectedCategoryCard
+                    styles.filterButton,
+                    selectedCategory === category && styles.selectedFilterButton
                   ]}
                   onPress={() => filterByCategory(category)}
                 >
-                  <View style={styles.categoryIconContainer}>
-                    <Ionicons 
-                      name={getCategoryIcon(category)} 
-                      size={22} 
-                      color={selectedCategory === category ? "#fff" : "#000"} 
-                    />
-                  </View>
                   <Text style={[
-                    styles.categoryTypeText,
-                    selectedCategory === category && styles.selectedCategoryText
-                  ]}>{category}</Text>
+                    styles.filterText,
+                    selectedCategory === category && styles.selectedFilterText
+                  ]}>
+                    {category}
+                  </Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -284,21 +341,18 @@ export default function AutoExpenseScreen() {
           
           {/* Expenses List */}
           <View style={styles.expensesDetails}>
-            <Text style={styles.sectionTitle}>Recent Auto Expenses</Text>
-            
             <View style={styles.expensesList}>
               {autoExpenses.map((item) => (
-                <View key={item.id || Math.random().toString()} style={styles.expenseItem}>
-                  <View style={[
-                    styles.expenseIconContainer,
-                    item.category === 'Petrol' ? styles.petrolExpense :
-                    item.category === 'Car Accident' ? styles.accidentExpense :
-                    item.category === 'Maintenance' ? styles.maintenanceExpense :
-                    item.category === 'Insurance' ? styles.insuranceExpense : styles.otherExpense
-                  ]}>
+                <TouchableOpacity 
+                  key={item.id || Math.random().toString()} 
+                  style={styles.expenseItem}
+                  onPress={() => handleExpensePress(item)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.expenseIconContainer}>
                     <Ionicons 
                       name={getCategoryIcon(item.category)} 
-                      size={22} 
+                      size={24} 
                       color="#000" 
                     />
                   </View>
@@ -312,7 +366,7 @@ export default function AutoExpenseScreen() {
                     </Text>
                   </View>
                   <Text style={styles.expenseAmount}>{formatAmount(item.amount)}</Text>
-                </View>
+                </TouchableOpacity>
               ))}
             </View>
           </View>
@@ -320,15 +374,57 @@ export default function AutoExpenseScreen() {
           {/* Add new expense button */}
           <View style={styles.actionSection}>
             <TouchableOpacity 
-              style={styles.fullWidthButton}
+              style={styles.addExpenseButton}
               onPress={navigateToAddAutoExpense}
             >
-              <Ionicons name="add-circle-outline" size={20} color="#fff" />
-              <Text style={styles.fullWidthButtonText}>Add New Auto Expense</Text>
+              <Text style={styles.addExpenseButtonText}>Add New Auto Expense</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
       )}
+      
+      {/* Delete Confirmation Modal */}
+      <Modal
+        visible={showDeleteModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowDeleteModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.simpleModalContainer}>
+            <View style={styles.simpleModalContent}>
+              <Text style={styles.simpleModalText}>
+                Are you sure you want to delete this auto expense?
+              </Text>
+            </View>
+            
+            <View style={styles.simpleModalActions}>
+              <TouchableOpacity 
+                style={styles.simpleModalCancel}
+                onPress={() => {
+                  setShowDeleteModal(false);
+                  setSelectedExpense(null);
+                }}
+                disabled={isDeleting}
+              >
+                <Text style={styles.simpleModalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.simpleModalDelete}
+                onPress={handleDeleteExpense}
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.simpleModalDeleteText}>Delete</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -404,143 +500,151 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   // Category Filter Section
-  categorySection: {
-    marginBottom: 20,
-    paddingHorizontal: 20,
-    paddingTop: 20,
+  filterSection: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 10,
-  },
-  categoryContainer: {
-    paddingRight: 20,
-  },
-  categoryCard: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 15,
-    marginRight: 12,
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#eee',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 1,
-    minWidth: 100,
-  },
-  selectedCategoryCard: {
-    backgroundColor: '#000',
-    borderColor: '#000',
-  },
-  categoryIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-    backgroundColor: '#f5f5f5',
-  },
-  categoryTypeText: {
+  filterTitle: {
     fontSize: 14,
-    fontWeight: '500',
+    color: '#666',
+    marginBottom: 8,
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    paddingBottom: 4,
+  },
+  filterButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 20,
+    marginRight: 8,
+  },
+  selectedFilterButton: {
+    backgroundColor: '#000',
+  },
+  filterText: {
+    fontSize: 14,
     color: '#333',
   },
-  selectedCategoryText: {
+  selectedFilterText: {
     color: '#fff',
+    fontWeight: '500',
   },
   // Expenses List
   expensesDetails: {
-    marginBottom: 20,
-    paddingHorizontal: 20,
+    paddingVertical: 8,
   },
   expensesList: {
-    backgroundColor: '#f9f9f9',
-    borderRadius: 12,
-    padding: 0,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    backgroundColor: '#fff',
   },
   expenseItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: '#f0f0f0',
   },
   expenseIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 10,
+    marginRight: 12,
     backgroundColor: '#f0f0f0',
-  },
-  petrolExpense: {
-    backgroundColor: '#E5F6FD',
-  },
-  accidentExpense: {
-    backgroundColor: '#FFE5E5',
-  },
-  maintenanceExpense: {
-    backgroundColor: '#E5E5FF',
-  },
-  insuranceExpense: {
-    backgroundColor: '#E5FFE5',
-  },
-  otherExpense: {
-    backgroundColor: '#F5F5F5',
   },
   expenseInfo: {
     flex: 1,
   },
   expenseTitle: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '500',
     marginBottom: 2,
   },
   expenseDate: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#666',
     marginBottom: 2,
   },
   expenseNote: {
     fontSize: 12,
-    color: '#777',
+    color: '#888',
+    fontStyle: 'italic',
   },
   expenseAmount: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#000',
   },
   // Action Section
   actionSection: {
-    paddingHorizontal: 20,
-    marginTop: 10,
-    marginBottom: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 20,
   },
-  fullWidthButton: {
+  addExpenseButton: {
     backgroundColor: '#000',
-    borderRadius: 10,
-    paddingVertical: 15,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
     alignItems: 'center',
+  },
+  addExpenseButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  simpleModalContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    width: '85%',
+    maxWidth: 320,
+    overflow: 'hidden',
+  },
+  simpleModalContent: {
+    padding: 24,
+  },
+  simpleModalText: {
+    fontSize: 16,
+    color: '#333',
+    textAlign: 'center',
+  },
+  simpleModalActions: {
     flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+  },
+  simpleModalCancel: {
+    flex: 1,
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRightWidth: 1,
+    borderRightColor: '#e0e0e0',
+  },
+  simpleModalCancelText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  simpleModalDelete: {
+    flex: 1,
+    paddingVertical: 16,
+    backgroundColor: '#000',
+    alignItems: 'center',
     justifyContent: 'center',
   },
-  fullWidthButtonText: {
+  simpleModalDeleteText: {
+    fontSize: 16,
     color: '#fff',
-    fontSize: 14,
     fontWeight: '600',
-    marginLeft: 8,
   },
 }); 

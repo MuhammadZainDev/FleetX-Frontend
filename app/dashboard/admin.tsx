@@ -11,7 +11,7 @@ import {
   Easing,
   ActivityIndicator
 } from 'react-native';
-import { router, useRouter } from 'expo-router';
+import { router, useRouter, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +19,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getAllDrivers } from '@/services/driver.service';
 import { getEarningsSummary } from '@/services/earning.service';
+import { getAllEarnings } from '@/services/earning.service';
 
 const screenWidth = Dimensions.get('window').width - 40;
 const screenHeight = Dimensions.get('window').height;
@@ -45,6 +46,7 @@ export default function AdminDashboard() {
   const [selectedPeriod, setSelectedPeriod] = useState('Daily');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const router = useRouter();
+  const pathname = usePathname();
   
   // New state variables for active drivers and their earnings
   const [activeDrivers, setActiveDrivers] = useState<Driver[]>([]);
@@ -183,8 +185,11 @@ export default function AdminDashboard() {
             await Promise.all(
               allDrivers.map(async (driver: Driver) => {
                 try {
-                  const summary = await getEarningsSummary(driver.id, 'monthly', null);
-                  earningsData[driver.id] = summary;
+                  // Remove period restriction to get all earnings
+                  const allEarningsResp = await getAllEarnings({ driverId: driver.id });
+                  let allEarnings = Array.isArray(allEarningsResp) ? allEarningsResp : (allEarningsResp.earnings || []);
+                  const totalEarnings = allEarnings.reduce((sum: number, e: any) => sum + parseFloat(e.amount), 0);
+                  earningsData[driver.id] = { totalEarnings };
                 } catch (error) {
                   console.error(`Error fetching earnings for driver ${driver.id}:`, error);
                   earningsData[driver.id] = { totalEarnings: 0 };
@@ -237,60 +242,62 @@ export default function AdminDashboard() {
           { transform: [{ translateX: sidebarAnim }] }
         ]}
       >
-        <View style={{height: screenHeight, display: 'flex', flexDirection: 'column', justifyContent: 'space-between'}}>
-          <View style={styles.sidebarHeader}>
-            <View style={styles.sidebarUserInfo}>
-              <View style={styles.sidebarAvatar}>
-                <Text style={styles.avatarText}>{user?.name?.charAt(0) || 'A'}</Text>
+        <View style={styles.sidebarContainer}>
+          <View style={styles.sidebarInner}>
+            <View style={styles.sidebarHeader}>
+              <View style={styles.sidebarUserInfo}>
+                <View style={styles.sidebarAvatar}>
+                  <Text style={styles.avatarText}>{user?.name?.charAt(0) || 'A'}</Text>
+                </View>
+                <View style={styles.sidebarUserDetails}>
+                  <Text style={styles.sidebarUserName}>{user?.name || 'Admin User'}</Text>
+                  <Text style={styles.sidebarUserRole}>{user?.role || 'Admin'}</Text>
+                </View>
               </View>
-              <View style={styles.sidebarUserDetails}>
-                <Text style={styles.sidebarUserName}>{user?.name || 'Admin User'}</Text>
-                <Text style={styles.sidebarUserRole}>{user?.role || 'Admin'}</Text>
-              </View>
-            </View>
-            <TouchableOpacity 
-              style={styles.closeSidebar}
-              onPress={() => setSidebarOpen(false)}
-            >
-              <Ionicons name="close" size={24} color="#000" />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView style={styles.sidebarContent}>
-            {menuItems.map((item, index) => (
               <TouchableOpacity 
-                key={index} 
-                style={[
-                  styles.sidebarMenuItem,
-                  index === 0 && styles.activeMenuItem
-                ]}
-                onPress={() => navigate(item.route)}
+                style={styles.closeSidebar}
+                onPress={() => setSidebarOpen(false)}
               >
-                <Ionicons 
-                  name={item.icon as any} 
-                  size={22} 
-                  color={index === 0 ? "#000" : "#666"} 
-                />
-                <Text 
-                  style={[
-                    styles.sidebarMenuItemText,
-                    index === 0 && styles.activeMenuItemText
-                  ]}
-                >
-                  {item.label}
-                </Text>
+                <Ionicons name="close" size={24} color="#000" />
               </TouchableOpacity>
-            ))}
-          </ScrollView>
-          
-          <View style={styles.sidebarFooter}>
-            <TouchableOpacity 
-              style={styles.logoutButton}
-              onPress={handleLogout}
-            >
-              <Ionicons name="log-out-outline" size={22} color="#FF3B30" />
-              <Text style={styles.logoutButtonText}>Logout</Text>
-            </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.sidebarContent} showsVerticalScrollIndicator={false}>
+              {menuItems.map((item, index) => (
+                <TouchableOpacity 
+                  key={index} 
+                  style={[
+                    styles.sidebarMenuItem,
+                    pathname === item.route && styles.activeMenuItem
+                  ]}
+                  onPress={() => navigate(item.route)}
+                >
+                  <Ionicons 
+                    name={item.icon} 
+                    size={22} 
+                    color={pathname === item.route ? "#000" : "#666"} 
+                  />
+                  <Text 
+                    style={[
+                      styles.sidebarMenuItemText,
+                      pathname === item.route && styles.activeMenuItemText
+                    ]}
+                  >
+                    {item.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            
+            <View style={styles.sidebarFooter}>
+              <TouchableOpacity 
+                style={styles.logoutButton}
+                onPress={handleLogout}
+              >
+                <Ionicons name="log-out-outline" size={22} color="#FF3B30" />
+                <Text style={styles.logoutButtonText}>Logout</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Animated.View>
@@ -305,9 +312,11 @@ export default function AdminDashboard() {
           </TouchableOpacity>
           <Text style={styles.title}>Dashboard</Text>
         </View>
-        <TouchableOpacity style={styles.notificationIcon}>
-          <Ionicons name="notifications" size={24} color="black" />
-          <View style={styles.notificationBadge} />
+        <TouchableOpacity 
+          style={styles.settingsIcon}
+          onPress={() => router.push('/settings')}
+        >
+          <Ionicons name="settings-outline" size={24} color="black" />
         </TouchableOpacity>
       </View>
       
@@ -353,11 +362,11 @@ export default function AdminDashboard() {
                     end={{ x: 1, y: 1 }}
                   >
                     <View style={[styles.cardContent, { justifyContent: 'flex-start', marginTop: 8 }]}>
-                                            <Text style={styles.amountLabel}>Total Earnings</Text>
+                      <Text style={styles.amountLabel}>Total Earnings</Text>
                       <Text style={styles.amount}>
                         AED {(driverEarnings[driver.id]?.totalEarnings || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </Text>
-          </View>
+                    </View>
                     <Text style={styles.driverName}>{driver.name}</Text>
                   </LinearGradient>
                 </TouchableOpacity>
@@ -384,7 +393,7 @@ export default function AdminDashboard() {
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color="#000" />
               <Text style={styles.loadingText}>Loading drivers...</Text>
-                  </View>
+            </View>
           ) : activeDrivers.length === 0 ? (
             <View style={styles.noDataContainer}>
               <Text style={styles.noDataText}>No drivers found</Text>
@@ -403,7 +412,7 @@ export default function AdminDashboard() {
                   <View style={styles.driverAvatar}>
                     <Text style={styles.avatarText}>{driver.name.charAt(0).toUpperCase()}</Text>
                   </View>
-              <View style={styles.driverInfo}>
+                  <View style={styles.driverInfo}>
                     <Text style={styles.listDriverName}>{driver.name}</Text>
                     <Text style={styles.driverEmail}>{driver.email}</Text>
                     <TouchableOpacity 
@@ -478,17 +487,8 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
   },
-  notificationIcon: {
+  settingsIcon: {
     position: 'relative',
-  },
-  notificationBadge: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'red',
   },
   // Sidebar styles
   overlay: {
@@ -501,7 +501,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     width: SIDEBAR_WIDTH,
-    height: '100%',
+    height: screenHeight + 100,
     backgroundColor: '#fff',
     zIndex: 2,
     borderTopRightRadius: 20,
@@ -511,14 +511,19 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 5,
-    bottom: 0,
+  },
+  sidebarContainer: {
+    flex: 1,
+  },
+  sidebarInner: {
+    flex: 1,
   },
   sidebarHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 40,
+    paddingTop: 60,
     paddingBottom: 25,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
@@ -582,7 +587,6 @@ const styles = StyleSheet.create({
     padding: 20,
     borderTopWidth: 1,
     borderTopColor: '#f0f0f0',
-    marginTop: 'auto',
   },
   logoutButton: {
     flexDirection: 'row',
