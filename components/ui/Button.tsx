@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, TouchableOpacity, Text, ActivityIndicator, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/Colors';
-import { ArrowIcon } from './ArrowIcon';
 
 type ButtonProps = {
   title: string;
@@ -46,8 +46,8 @@ export function Button({
   
   // Force white text for loading state, regardless of button type
   const loadingTextStyle = type === 'outline' && !outlined ? 
-    { color: '#000000', fontWeight: 'bold', fontSize: 16 } : 
-    { color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 };
+    { color: '#000000', fontWeight: '600' as const, fontSize: 16 } : 
+    { color: '#FFFFFF', fontWeight: '600' as const, fontSize: 16 };
 
   return (
     <TouchableOpacity 
@@ -64,7 +64,9 @@ export function Button({
         <View style={styles.buttonContent}>
           <Text style={textStyle}>{title}</Text>
           {/* Only show icon if icon prop is true and it's not a login/auth button */}
-          {icon && !title.includes('Login') && !title.includes('Create') && <ArrowIcon size={28} color={iconColor} />}
+          {icon && !title.includes('Login') && !title.includes('Create') && (
+            <Ionicons name="arrow-forward" size={24} color={iconColor} />
+          )}
         </View>
       )}
     </TouchableOpacity>
